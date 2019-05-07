@@ -19,6 +19,7 @@ library(stepPlr)
 library(doMC)
 library(tidyverse)
 library(foreign) # for reading Stata .dta files
+library(maptools) # for displaying countries on world map
 
 theme_set(theme_bw())
 
@@ -40,7 +41,7 @@ Later, a third part will deal with suggesting new models...
 
 # Data Exploration
 
-```{r data-reading-and-processing}
+```{r data-reading-and-exploration}
 # HS_original: Civil War Data by Hegre and Sambanis (2006), the original version
 data_HS_original <- read.dta(file="data/Sambanis (Aug 06).dta")
 
@@ -66,6 +67,39 @@ colnames(data_presentation) <- c('HS_original', 'HS_cleaned', 'HS_imputed', 'AM_
 rownames(data_presentation) <- c('No. features', 'No. empty cells', 'No. examples')
 as.data.frame(data_presentation)
 
+# Check intersection and difference of features on two datasets
+# setdiff(colnames(data_HS_imputed), colnames(data_HS_original))
+# length(intersect(colnames(data_HS_imputed), colnames(data_HS_original)))
+
+# Function for converting a specified dependent variable into factor levels
+Y_factor <- function(dataset_column) {
+  return(factor(dataset_column, levels=c(0,1), labels=c("peace", "war")))
+}
+
+# Convert 'warstds' column into 'peace' or 'war' (initially marked 0 or 1)
+data_HS_original$warstds <- Y_factor(data_HS_original$warstds)
+data_HS_imputed$warstds <- Y_factor(data_HS_imputed$warstds)
+data_AM_imputed$warstds <- Y_factor(data_AM_imputed$warstds)
+
+# Visualize countries with civil war for each dataset
+data(wrld_simpl)
+HS_original_countries = wrld_simpl@data$NAME %in% 
+  data_HS_original[data_HS_original$warstds=='war',]$country
+AM_imputed_countries = wrld_simpl@data$NAME %in% 
+  data_AM_imputed[data_AM_imputed$warstds=='war',]$country
+
+plot(wrld_simpl, col = c(gray(.80), "red")[HS_original_countries+1])
+plot(wrld_simpl, col = c(gray(.80), "blue")[AM_imputed_countries+1])
+
+```
+
+There are a few questions that remained unanswered after replicating the data reading and processing done by authors. 
+
+The reported presentation data frame above shows that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. ```HS_imputed```, the dataset imputed by authors on the other hand, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. Lastly, the second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values.
+
+It is also unclear why the paper needs two different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. 
+
+```{r data-processing}
 # The 88 variables selected by authors from Sambanis (2006) Appendix
 vars <- c("warstds", "ager", "agexp", "anoc", "army85", "autch98", "auto4",
           "autonomy", "avgnabo", "centpol3", "coldwar", "decade1", "decade2",
@@ -81,15 +115,15 @@ vars <- c("warstds", "ager", "agexp", "anoc", "army85", "autch98", "auto4",
           "presi", "pri", "proxregc", "ptime", "reg", "regd4_alt", "relfrac", "seceduc",
           "second", "semipol3", "sip2", "sxpnew", "sxpsq", "tnatwar", "trade",
           "warhist", "xconst")
-
-# Check intersection and difference of features on two datasets
-# setdiff(colnames(data_HS_imputed), colnames(data_HS_original))
-# length(intersect(colnames(data_HS_imputed), colnames(data_HS_original)))
 ```
 
-There are a few questions that remained unanswered after replicating the data reading and processing done by authors. At least at first, it is unclear why the paper needs two different imputed datasets. For comparison and metrics reporting purposes, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a splitting of data. 
+```{r class-imbalance-exploration}
+table(data_HS_original$warstds)
+table(data_HS_imputed$warstds)
+table(data_AM_imputed$warstds)
+```
 
-Moreover, it could be seen from the reported data frame above that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells are cleaned, ```HS_cleaned```, shows that every single row of the original dataset contained some missing values. ```HS_imputed```, the dataset imputed by authors, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset.
+With these reported tables, it seems that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine i) down-sampling from the majority class or ii) up-sampling from the minority class would be the reasonable action, rather than increasing the number of examples of the majority class. Hence, we will implement these two techniques, i) and ii), and see if they yield better results.
 
 
 The following is a list of all packages used to generate these results. (Leave at very end of file.)
