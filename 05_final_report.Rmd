@@ -1,6 +1,6 @@
 ---
 title: "MSD 2019 Final Project"
-subtitle: "A replication and extension of < PAPER TITLE > by < ORIGINAL AUTHORS >, < PUBLISHED IN >"
+subtitle: "A replication and extension of Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al., October 22, 2015"
 author: "Your Names (your unis)"
 date: '`r Sys.time()`'
 output:
@@ -9,9 +9,87 @@ output:
     toc_depth: 3
 ---
 
+```{r setup, include=FALSE}
+# Setting up dependencies
+library(randomForest)
+library(caret)
+library(ROCR)
+library(pROC)
+library(stepPlr)
+library(doMC)
+library(tidyverse)
+library(foreign) # for reading Stata .dta files
 
+theme_set(theme_bw())
 
+knitr::opts_chunk$set(echo = TRUE)
+```
 
+# Introduction
+
+## Motivation
+Prediction is at the heart of many machine learning and data science applications, and its importance is amplified in the context of political science. Especially for the case of civil war onset, robust models that can make correct predictions has the potential to save millions of lives and guide political agendas for the years to come.
+
+## Paper Description
+Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al. is an explaratory research paper that, among several other things, makes the argument that most well-known logistic models acquire relatively lower predictive powers for civil war onsets, and shows that a custom random forest model achieves much higer prediction accuricies.
+
+## Replication Description
+The replication for the paper mentioned will consist of two main parts, which will go parallel to each other as represented in this R Notebook. The first part will deal with extracting code snippets from the original R code (found in ```original_code/```), and questioning the reasonability and correctness of the methods and code semantics used, as well as an effort to see if results can be completely replicated. The second part will deal with suggesting improvements, modifications, and eventually corrections to the original R code, where we will try to report summaries of each model using fair metrics and correct methodologies. 
+
+Later, a third part will deal with suggesting new models...
+
+# Data Exploration
+
+```{r data-reading-and-processing}
+# HS_original: Civil War Data by Hegre and Sambanis (2006), the original version
+data_HS_original <- read.dta(file="data/Sambanis (Aug 06).dta")
+
+# HS_cleaned: Civil War Data by Hegre and Sambanis (2006), NAs eliminated version
+data_HS_cleaned <- na.omit(data_HS_original)
+
+# HS_imputed: Civil War Data by Hegre and Sambanis (2006), imputed by authors
+data_HS_imputed <- read.csv(file="data/SambnisImp.csv") ## data for prediction
+
+# AM_imputed: Amelia dataset imputed by authors
+data_AM_imputed <- read.csv(file="data/Amelia.Imp3.csv") ## data for causal machanisms
+# unique(data_AM_imputed$country) # check countries
+
+data_presentation <- matrix(c(ncol(data_HS_original), sum(is.na(data_HS_original)),
+                              nrow(data_HS_original),
+                              ncol(data_HS_cleaned), sum(is.na(data_HS_cleaned)),
+                              nrow(data_HS_cleaned),
+                              ncol(data_HS_imputed), sum(is.na(data_HS_imputed)),
+                              nrow(data_HS_imputed),
+                              ncol(data_AM_imputed), sum(is.na(data_AM_imputed)),
+                              nrow(data_AM_imputed)), ncol=4)
+colnames(data_presentation) <- c('HS_original', 'HS_cleaned', 'HS_imputed', 'AM_imputed')
+rownames(data_presentation) <- c('No. features', 'No. empty cells', 'No. examples')
+as.data.frame(data_presentation)
+
+# The 88 variables selected by authors from Sambanis (2006) Appendix
+vars <- c("warstds", "ager", "agexp", "anoc", "army85", "autch98", "auto4",
+          "autonomy", "avgnabo", "centpol3", "coldwar", "decade1", "decade2",
+          "decade3", "decade4", "dem", "dem4", "demch98", "dlang", "drel",
+          "durable", "ef", "ef2", "ehet", "elfo", "elfo2", "etdo4590",
+          "expgdp", "exrec", "fedpol3", "fuelexp", "gdpgrowth", "geo1", "geo2",
+          "geo34", "geo57", "geo69", "geo8", "illiteracy", "incumb", "infant",
+          "inst", "inst3", "life", "lmtnest", "ln_gdpen", "lpopns", "major", "manuexp", 
+          "milper", "mirps0", "mirps1", "mirps2", "mirps3", "nat_war", "ncontig",
+          "nmgdp", "nmdp4_alt", "numlang", "nwstate", "oil", "p4mchg",
+          "parcomp", "parreg", "part", "partfree", "plural", "plurrel",
+          "pol4", "pol4m", "pol4sq", "polch98", "polcomp", "popdense",
+          "presi", "pri", "proxregc", "ptime", "reg", "regd4_alt", "relfrac", "seceduc",
+          "second", "semipol3", "sip2", "sxpnew", "sxpsq", "tnatwar", "trade",
+          "warhist", "xconst")
+
+# Check intersection and difference of features on two datasets
+# setdiff(colnames(data_HS_imputed), colnames(data_HS_original))
+# length(intersect(colnames(data_HS_imputed), colnames(data_HS_original)))
+```
+
+There are a few questions that remained unanswered after replicating the data reading and processing done by authors. At least at first, it is unclear why the paper needs two different imputed datasets. For comparison and metrics reporting purposes, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a splitting of data. 
+
+Moreover, it could be seen from the reported data frame above that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells are cleaned, ```HS_cleaned```, shows that every single row of the original dataset contained some missing values. ```HS_imputed```, the dataset imputed by authors, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset.
 
 
 The following is a list of all packages used to generate these results. (Leave at very end of file.)
