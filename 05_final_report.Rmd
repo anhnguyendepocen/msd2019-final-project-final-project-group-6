@@ -109,14 +109,47 @@ The reported presentation data frame above shows that the original Hegre and Sam
 
 It is also unclear why the paper needs two different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. On the contrary, the authors have only used in-sample metric to report the accuracies of the models, hence the reported accuracies don't really say much. In order to assess performance, we have to test our models for out-of-sample data.
 
-# Model Specifications
+```{r class-imbalance-exploration}
+# Explore class imbalance
+table(data_HS_original$warstds)
+table(data_HS_imputed$warstds)
+table(data_AM_imputed$warstds)
+table(data_AF_imputed$warstds)
+```
 
+With the first three reported tables, it seems that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine i) down-sampling from the majority class or ii) up-sampling from the minority class would be the reasonable action, rather than increasing the number of examples of the majority class. Hence, we will implement these two techniques, i) and ii), and see if they yield better results.
+
+SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation) Hence, it is a combination of i) and ii).
+
+# Data Processing, SMOTE, and Training/Test Split for Accurate Assessment
+Based on our exploration, we will drop every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years 1945-1990 will construct the training set, whereas examples after 1990 will construct the testing set.
+
+```{r data-processing-and-split}
+# Perform the split
+split_year <- 1990
+data_train <- data_HS_imputed[data_HS_imputed$year <= split_year, ]
+data_test <- data_HS_imputed[data_HS_imputed$year > split_year, ]
+
+# Observe class-imbalance in training and testing sets
+table(data_train$warstds)
+table(data_test$warstds)
+
+# Since we are done with visualizations and exploration, refactor the dependent variable
+data_train$warstds <- as.factor(data_train$warstds)
+data_test$warstds <- as.factor(data_test$warstds)
+
+# SMOTE for artificially creating a more balanced training dataset
+data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100)
+table(data_train_balanced$warstds)
+```
+
+# Model Specifications
 To keep track of model specifications which use different numbers and types of features based on either theory or computations, we propose that we explicitly define features and hence accompanying formulas to be used by models later in this next code block. The 4 specifications the paper have covered are:
 
-1) Their own specifications consisting of 88 variables, selected from Sambanis (2006) index
-2) Fearon and Laitin specification (2003) consisting of 11 variables
-3) Collier and Hoeffler specification (2004) consisting of 12 variables
-4) Hegre and Sambanis specification (2006) consisting of 20 variables
+1) Fearon and Laitin specification (2003) consisting of 11 variables
+2) Collier and Hoeffler specification (2004) consisting of 12 variables
+3) Hegre and Sambanis specification (2006) consisting of 20 variables
+4) The authors' specifications consisting of 88 variables, selected from Sambanis (2006) index
 
 ```{r data-feature-selection}
 # Function to generate a formula given dependent variable label and features
@@ -167,45 +200,35 @@ HS_vars <- c("lpopns", "ln_gdpen", "inst3", "parreg", "geo34", "proxregc", "gdpg
 HS_spec <- get_model_formula(y_var, HS_vars)
 ```
 
-```{r class-imbalance-exploration}
-# Explore class imbalance
-table(data_HS_original$warstds)
-table(data_HS_imputed$warstds)
-table(data_AM_imputed$warstds)
-
-# SMOTE for artificially creating a more balanced dataset
-data_HS_balanced <- SMOTE(warstds ~ ., data_HS_imputed, perc.over = 600, perc.under=100)
-table(data_HS_balanced$warstds)
-```
-
-With the first three reported tables, it seems that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine i) down-sampling from the majority class or ii) up-sampling from the minority class would be the reasonable action, rather than increasing the number of examples of the majority class. Hence, we will implement these two techniques, i) and ii), and see if they yield better results.
-
-SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation) Hence, it is a combination of i) and ii).
-
 Below is the setup to be run before training. We are not changing anything here. One thing to look for is that we will set the seed for each caret training function call, so that all of the results presented here are replicable. The original code by the authors only set the seed once, which unfortunately makes their results unreplicable.
+
 ```{r setup-before-training}
 set.seed(666) ## the most metal seed for CV
 
+# Specify number of folds (10 by default, suggested by authors)
+num_folds <- 10
+cv_index <- createFolds(factor(data_train$warstds), num_folds, returnTrain=T)
 ## This method of data slicing - or CV - will be used for all logit models
 tc <- trainControl(method="cv", 
-                   number=10, ## creates CV folds - 10 for this data
+                   index=cv_index,
+                   number=num_folds, ## creates CV folds - 10 for this data
                    summaryFunction=twoClassSummary, ## provides ROC stats in call to model
                    classProb=T)
-
-# Since we are done with visualizations and exploration, refactor the dependent variable
-data_HS_imputed$warstds <- as.factor(data_HS_imputed$warstds)
-data_AM_imputed$warstds <- as.factor(data_AM_imputed$warstds)
-data_HS_balanced$warstds <- as.factor(data_HS_balanced$warstds)
 ```
 
 Now that everything is set up, we will train and test logistic regression and random forest models (* only in-sample as of now) using the 4 specifications mentioned previously, one at a time. A problem we saw with the original implementation was that the random forest training commented out included an option for down-sampling, whereas the other logistic regression models didn't have this option specified. This has the potential to yield unfair comparisons, hence we removed down-sampling. For dealing with class-imbalance, we will train models with our SMOTEd dataset later and test them on unseen, original (not artifically generated by SMOTE) data.
+
+# Model Training
+We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train the author specification (88 variables) with the ```data_train_balanced``` dataset. For each of the 5 versions of training, we will include a i) logistic regression model (LR) with uncorrected logits, ii) a logistic regression model (LR) with penalized logits using Firth's method, and iii) a random forest model (RF). All of the models use the cross-validation training control, ```tc```, implemented in the above code block.
+
+1) Fearon and Laitin specification (2003) consisting of 11 variables
 ```{r LR-vs-RF-on-FL-specification}
 set.seed(666) ## the most metal seed for CV
 
 # Fearon and Laitin LR Model (2003) Uncorrected
 model_FL_uncorrected <- train(FL_spec,
                               metric="ROC", method="glm", family="binomial", 
-                              trControl=tc, data=data_HS_imputed)
+                              trControl=tc, data=data_train)
 
 #summary(model_FL_uncorrected) ## provides coefficients & traditional R model output
 #model_FL_uncorrected ## provides CV summary stats
@@ -214,7 +237,7 @@ model_FL_uncorrected <- train(FL_spec,
 # Fearon and Laitin LR Model (2003) Penalized
 model_FL_penalized <- train(FL_spec,
                             metric="ROC", method="plr", # Firth's penalized LR
-                            trControl=tc, data=data_HS_imputed)
+                            trControl=tc, data=data_train)
 #summary(model_FL_penalized)
 #model_FL_penalized
 #confusionMatrix(model_FL_penalized, norm="average")
@@ -222,20 +245,19 @@ model_FL_penalized <- train(FL_spec,
 # Random Forest Model on Fearon and Laitin (2003) specification
 model_FL_RF <- train(FL_spec,
                      metric="ROC", method="rf",
-                     trControl=tc, data=data_HS_imputed)
+                     trControl=tc, data=data_train)
 #summary(model_FL_RF)
 #model_FL_RF
 #confusionMatrix(model_FL_RF, norm="average")
 ```
 
-
+2) Collier and Hoeffler specification (2004) consisting of 12 variables
 ```{r LR-vs-RF-on-CH-specification}
 set.seed(666) ## the most metal seed for CV
-
 # Collier and Hoeffler LR Model (2004) Uncorrected
 model_CH_uncorrected <- train(CH_spec,
                               metric="ROC", method="glm", family="binomial", 
-                              trControl=tc, data=data_HS_imputed)
+                              trControl=tc, data=data_train)
 
 #summary(model_CH_uncorrected) ## provides coefficients & traditional R model output
 #model_CH_uncorrected ## provides CV summary stats
@@ -244,7 +266,7 @@ model_CH_uncorrected <- train(CH_spec,
 # Collier and Hoeffler LR Model (2004) Penalized
 model_CH_penalized <- train(CH_spec,
                             metric="ROC", method="plr", # Firth's penalized LR
-                            trControl=tc, data=data_HS_imputed)
+                            trControl=tc, data=data_train)
 #summary(model_CH_penalized)
 #model_CH_penalized
 #confusionMatrix(model_CH_penalized, norm="average")
@@ -252,19 +274,20 @@ model_CH_penalized <- train(CH_spec,
 # Random Forest Model on Collier and Hoeffler (2004) specification
 model_CH_RF <- train(CH_spec,
                      metric="ROC", method="rf",
-                     trControl=tc, data=data_HS_imputed)
+                     trControl=tc, data=data_train)
 #summary(model_CH_RF)
 #model_CH_RF
 #confusionMatrix(model_CH_RF, norm="average")
 ```
 
+3) Hegre and Sambanis specification (2006) consisting of 20 variables
 ```{r LR-vs-RF-on-HS-specification}
 set.seed(666) ## the most metal seed for CV
 
 # Hegre and Sambanis LR Model (2006) Uncorrected
 model_HS_uncorrected <- train(HS_spec,
                               metric="ROC", method="glm", family="binomial", 
-                              trControl=tc, data=data_HS_imputed)
+                              trControl=tc, data=data_train)
 
 #summary(model_HS_uncorrected) ## provides coefficients & traditional R model output
 #model_HS_uncorrected ## provides CV summary stats
@@ -273,7 +296,7 @@ model_HS_uncorrected <- train(HS_spec,
 # Hegre and Sambanis LR Model (2006) Penalized
 model_HS_penalized <- train(HS_spec,
                             metric="ROC", method="plr", # Firth's penalized LR
-                            trControl=tc, data=data_HS_imputed)
+                            trControl=tc, data=data_train)
 #summary(model_HS_penalized)
 #model_HS_penalized
 #confusionMatrix(model_HS_penalized, norm="average")
@@ -281,11 +304,115 @@ model_HS_penalized <- train(HS_spec,
 # Random Forest Model on Hegre and Sambanis (2006) specification
 model_HS_RF <- train(HS_spec,
                      metric="ROC", method="rf",
-                     trControl=tc, data=data_HS_imputed)
+                     trControl=tc, data=data_train)
 #summary(model_HS_RF)
 #model_HS_RF
 #confusionMatrix(model_HS_RF, norm="average")
 ```
+
+4) The authors' specifications consisting of 88 variables, selected from Sambanis (2006) index
+```{r LR-vs-RF-on-author-specification}
+set.seed(666) ## the most metal seed for CV
+
+# Author specification (2016) LR Model Uncorrected
+model_AS_uncorrected <- train(author_spec,
+                              metric="ROC", method="glm", family="binomial", 
+                              trControl=tc, data=data_train)
+
+#summary(model_AS_uncorrected) ## provides coefficients & traditional R model output
+#model_AS_uncorrected ## provides CV summary stats
+#confusionMatrix(model_AS_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Author specification (2016) LR Model Penalized
+model_AS_penalized <- train(author_spec,
+                            metric="ROC", method="plr", # Firth's penalized LR
+                            trControl=tc, data=data_train)
+#summary(model_AS_penalized)
+#model_AS_penalized
+#confusionMatrix(model_AS_penalized, norm="average")
+
+# Random Forest Model on author specification (2016)
+model_AS_RF <- train(author_spec,
+                     metric="ROC", method="rf",
+                     importance=T, ## Variable importance measures retained
+                     trControl=tc, data=data_train)
+#summary(model_AS_RF)
+#model_AS_RF
+#confusionMatrix(model_AS_RF, norm="average")
+```
+
+5) The authors' specifications consisting of 88 variables, trained on ```data_train_balanced```, which was artificially generated from ```data_train``` using the SMOTE algorithm discussed previously.
+```{r LR-vs-RF-on-author-specification-with-SMOTEd-dataset}
+set.seed(666) ## the most metal seed for CV
+
+# Author specification (2016) LR Model Uncorrected
+model_AS_uncorrected_smoted <- train(author_spec,
+                                     metric="ROC", method="glm", family="binomial", 
+                                     trControl=tc, data=data_train_balanced)
+
+#summary(model_AS_uncorrected_smoted) ## provides coefficients & traditional R model output
+#model_AS_uncorrected_smoted ## provides CV summary stats
+#confusionMatrix(model_AS_uncorrected_smoted, norm="average") ## confusion matrix for predicted classes
+
+# Author specification (2016) LR Model Penalized
+model_AS_penalized_smoted <- train(author_spec,
+                                   metric="ROC", method="plr", # Firth's penalized LR
+                                   trControl=tc, data=data_train_balanced)
+#summary(model_AS_penalized_smoted)
+#model_AS_penalized_smoted
+#confusionMatrix(model_AS_penalized_smoted, norm="average")
+
+# Random Forest Model on author specification (2016)
+model_AS_RF_smoted <- train(author_spec,
+                            metric="ROC", method="rf",
+                            importance=T, ## Variable importance measures retained
+                            trControl=tc, data=data_train_balanced)
+#summary(model_AS_RF_smoted)
+#model_AS_RF_smoted
+#confusionMatrix(model_AS_RF_smoted, norm="average")
+```
+
+# Variable Importance Visualization for Random Forest Models
+One advantage of the Random Forests algorithm is that it is easy to interpret, robust to outliers and noise, and allows the analyst to infer causal mechanisms. Although the paper has serious methodological flaws, its suggestion of Random Forests is well-grounded. The original R code by authors visualizes the variable importance for a Random Forest Model trained on the ```data_AM_imputed``` dataset, however we dropped that dataset as discussed before. It makes the most sense to visualize the variable importance on the 5 different random forest models we trained above, 4 on ```data_train``` and 1 on ```data_train_balanced```. By doing this, we can achieve: i) See if theories suggested by different parties on theoretical variables deciding a civil war onset agree with our findings or not, ii) Observe if any variables are deemed to be `unimportant` by the algorithm, and finally iii) Observe the difference of variable importance on random forests models trained on original training set and artifically created training set, and see how the SMOTE algorithms affects this measure.
+
+Firstly, we will retrain random forest models with the same specs and data mentioned above, but with ```randomForests()``` class this same in order to plot importance of variables.
+```{r retraining-RF-models}
+FL_RF <- randomForest(FL_spec, importance=T, proximity=F, ntree=1000, 
+                      confusion=T, err.rate=T, data=data_train)
+CH_RF <- randomForest(CH_spec, importance=T, proximity=F, ntree=1000, 
+                      confusion=T, err.rate=T, data=data_train)
+HS_RF <- randomForest(HS_spec, importance=T, proximity=F, ntree=1000, 
+                      confusion=T, err.rate=T, data=data_train)
+AS_RF <- randomForest(author_spec, importance=T, proximity=F, ntree=1000, 
+                      confusion=T, err.rate=T, data=data_train)
+AS_RF_smoted <- randomForest(author_spec, importance=T, proximity=F, ntree=1000, 
+                             confusion=T, err.rate=T, data=data_train_balanced)
+```
+
+Now, we can visualize the variable importances for each of the random forest models trained above.
+```{r variable-importance-based-on-RF-models}
+# Specify maximum number of variables (features) to be displayed
+num_vars <- 20
+varImpPlot(FL_RF, sort=T, type=2, 
+           main="Fearon and Laitin (2003) Variables Importance on Training Accuracy", 
+           n.var=num_vars)
+varImpPlot(CH_RF, sort=T, type=2, 
+           main="Collier and Hoeffler (2004) Variables Importance on Training Accuracy", 
+           n.var=num_vars)
+varImpPlot(HS_RF, sort=T, type=2, 
+           main="Hegre and Sambanis (2006) Variables Importance on Training Accuracy", 
+           n.var=num_vars)
+varImpPlot(AS_RF, sort=T, type=2, 
+           main="Author Specified (2016) Variables Importance on Training Accuracy", 
+           n.var=num_vars)
+varImpPlot(AS_RF_smoted, sort=T, type=2, 
+           main="Author Specified (2016) Variables Importance on Training Accuracy w/ SMOTEd data", 
+           n.var=num_vars)
+```
+
+
+
+
 
 # Dependencies Summary
 The following is a list of all packages used to generate these results.
