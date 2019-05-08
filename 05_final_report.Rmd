@@ -11,12 +11,12 @@ output:
 
 ```{r setup, include=FALSE}
 # Setting up dependencies
-library(randomForest)
-library(caret)
+library(randomForest) # for training RFs with variable importance
+library(caret) # for training LR and RF models
 library(ROCR)
-library(pROC)
+library(pROC) # for plotting ROC curves
 library(stepPlr)
-library(doMC)
+library(doMC) # for distributed workload
 library(tidyverse)
 library(foreign) # for reading Stata .dta files
 library(maptools) # for displaying countries on world map
@@ -576,6 +576,136 @@ separationplot(AS_RF_smoted_pred_prob$war,
                height=1.5, col0="white", col1="black", newplot=F)
 ```
 
+Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: i) We can group by specifications and assess the performance difference between uncorrected logistic regression, penalized logistic regression, and random forest algorithm for each of the specifications, or ii) We can group by type of model and assess the performance difference in same models when different specifications with different numbers of variables and circumstances (SMOTE) applied. Here, we will represent both.
+
+```{r roc-curves-for-specs}
+# Set for square-grid ROC plots
+par(pty = "s")
+
+# Plot ROC curves for prediction with Fearon and Laitin specification (2003)
+plot.roc(data_test$warstds, FL_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ FL spec (2003)")
+plot.roc(data_test$warstds, add=T, FL_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, FL_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),  
+       cex = .75)
+
+# Plot ROC curves for prediction with Collier and Hoeffler specification (2004)
+plot.roc(data_test$warstds, CH_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ CH spec (2004)")
+plot.roc(data_test$warstds, add=T, CH_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, CH_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   CH_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   CH_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   CH_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),  
+       cex = .75)
+
+# Plot ROC curves for prediction with Hegre and Sambanis specification (2006)
+plot.roc(data_test$warstds, HS_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ HS spec (2006)")
+plot.roc(data_test$warstds, add=T, HS_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, HS_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   HS_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   HS_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   HS_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),  
+       cex = .75)
+
+# Plot ROC curves for prediction with author specification (2016)
+# plot.roc(data_test$warstds, AS_uncorrected_pred_prob$war, col="blue",
+#          xlim=c(1,0), las=1, bty="n", asp=NA,
+#          main="Out-of-sample ROC Curves for Models w/ author spec (2016)")
+# plot.roc(data_test$warstds, add=T, AS_penalized_pred_prob$war, col="red")
+# plot.roc(data_test$warstds, add=T, AS_RF_pred_prob$war, col="darkgreen")
+# legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+#                               round(as.numeric(roc(data_test$warstds,
+#                                                    AS_uncorrected_pred_prob$war)$auc),3)),
+#                         paste("(2) Penalized LR, AUC:",
+#                               round(as.numeric(roc(data_test$warstds,
+#                                                    AS_penalized_pred_prob$war)$auc),3)),
+#                         paste("(3) Random Forest, AUC:",
+#                               round(as.numeric(roc(data_test$warstds,
+#                                                    AS_RF_pred_prob$war)$auc),3))),
+#        text.col=c("blue","red","darkgreen"),
+#        cex = .75)
+
+# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
+plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec (2016) (SMOTEd)")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+```
+```{r roc-curves-for-models}
+# Set for square-grid ROC plots
+par(pty = "s")
+
+# Plot ROC curves for prediction with uncorrected logistic regression model
+plot.roc(data_test$warstds, FL_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for uncorrected LR Models")
+plot.roc(data_test$warstds, add=T, CH_uncorrected_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, HS_uncorrected_pred_prob$war, col="darkgreen")
+plot.roc(data_test$warstds, add=T, AS_uncorrected_pred_prob$war, col="purple")
+plot.roc(data_test$warstds, add=T, AS_uncorrected_smoted_pred_prob$war, col="goldenrod")
+
+legend("bottomright", c(paste("(1) FL (2003), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) CH (2004), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   CH_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(3) HS (2006), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   HS_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(4) AS (2016), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(5) AS (2016) SMOTE, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob$war)$auc),3))),
+       
+       text.col=c("blue","red","darkgreen", "purple", "goldenrod"),  
+       cex = .75)
+
+#### PLOT THE OTHER ROC CURVES WHEN AS (2016) PENALIZED LR & RF MODELS ARE TRAINED ####
+```
 
 # Dependencies Summary
 The following is a list of all packages used to generate these results.
@@ -586,4 +716,6 @@ sessionInfo()
 # References
 * https://stackoverflow.com/questions/11225343/how-to-create-a-world-map-in-r-with-specific-countries-filled-in
 * https://stackoverflow.com/questions/20624698/fixing-set-seed-for-an-entire-session
+* https://stackoverflow.com/questions/42057979/proc-roc-curves-remove-empty-space
+
 
