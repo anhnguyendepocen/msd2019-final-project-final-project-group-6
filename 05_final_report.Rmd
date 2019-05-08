@@ -21,6 +21,7 @@ library(tidyverse)
 library(foreign) # for reading Stata .dta files
 library(maptools) # for displaying countries on world map
 library(DMwR) # for up-sampling with SMOTE
+library(separationplot) # for displaying seperation plots
 
 theme_set(theme_bw())
 
@@ -459,6 +460,7 @@ AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="ra
 AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
 ```
 
+Let's draw the confusion matrices for each instance.
 ```{r confusion-matrices}
 # Confusion matrices for prediction with Fearon and Laitin specification (2003)
 table(pred=FL_uncorrected_pred_raw, obs=data_test$warstds)
@@ -486,8 +488,92 @@ table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
 ```
 
+Let's draw the seperation plots for each instance.
 ```{r seperation-plots}
+# Seperation plots for prediction with Fearon and Laitin specification (2003)
+separationplot(FL_uncorrected_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Fearon and Laitin Spec (2003) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(FL_penalized_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Fearon and Laitin Spec (2003) Penalized LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(FL_RF_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Fearon and Laitin Spec (2003) RF Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
 
+# Seperation plots for prediction with Collier and Hoeffler specification (2004)
+separationplot(CH_uncorrected_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Collier and Hoeffler Spec (2004) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(CH_penalized_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Collier and Hoeffler Spec (2004) Penalized LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(CH_RF_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Collier and Hoeffler Spec (2004) RF Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plots for prediction with Hegre and Sambanis specification (2006)
+separationplot(HS_uncorrected_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Hegre and Sambanis Spec (2006) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(HS_penalized_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Hegre and Sambanis Spec (2006) Penalized LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(HS_RF_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Hegre and Sambanis Spec (2006) RF Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plots for prediction with author specification (2016)
+separationplot(AS_uncorrected_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Author Spec (2016) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+# separationplot(AS_penalized_pred_prob$war,
+#                as.numeric(data_test$warstds)-1, type="line",
+#                line=T, lwd2=1, show.expected=T,
+#                heading="Author Spec (2016) Penalized LR Seperation Plot",
+#                height=1.5, col0="white", col1="black", newplot=F)
+# separationplot(AS_RF_pred_prob$war,
+#                as.numeric(data_test$warstds)-1, type="line",
+#                line=T, lwd2=1, show.expected=T,
+#                heading="Author Spec (2016) RF Seperation Plot",
+#                height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plots for prediction with author specification (2016) trained on SMOTEd dataset
+separationplot(AS_uncorrected_smoted_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Author Spec (2016) Uncorrected LR (SMOTEd) Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(AS_penalized_smoted_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Author Spec (2016) Penalized LR (SMOTEd) Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(AS_RF_smoted_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Author Spec (2016) RF (SMOTEd) Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
 ```
 
 
