@@ -55,7 +55,9 @@ data_HS_imputed <- read.csv(file="data/SambnisImp.csv") ## data for prediction
 
 # AM_imputed: Amelia dataset imputed by authors
 data_AM_imputed <- read.csv(file="data/Amelia.Imp3.csv") ## data for causal machanisms
-# unique(data_AM_imputed$country) # check countries
+
+# AF_imputed: Africa dataset imputed by authors
+data_AF_imputed <- read.csv(file="data/AfricaImp.csv")
 
 data_presentation <- matrix(c(ncol(data_HS_original), sum(is.na(data_HS_original)),
                               nrow(data_HS_original),
@@ -64,14 +66,18 @@ data_presentation <- matrix(c(ncol(data_HS_original), sum(is.na(data_HS_original
                               ncol(data_HS_imputed), sum(is.na(data_HS_imputed)),
                               nrow(data_HS_imputed),
                               ncol(data_AM_imputed), sum(is.na(data_AM_imputed)),
-                              nrow(data_AM_imputed)), ncol=4)
-colnames(data_presentation) <- c('HS_original', 'HS_cleaned', 'HS_imputed', 'AM_imputed')
+                              nrow(data_AM_imputed),
+                              ncol(data_AF_imputed), sum(is.na(data_AF_imputed)),
+                              nrow(data_AF_imputed)), ncol=5)
+colnames(data_presentation) <- c('HS_original', 'HS_cleaned', 
+                                 'HS_imputed', 'AM_imputed', 'AF_imputed')
 rownames(data_presentation) <- c('No. features', 'No. empty cells', 'No. examples')
 as.data.frame(data_presentation)
 
 # Check intersection and difference of features on two datasets
 # setdiff(colnames(data_HS_imputed), colnames(data_HS_original))
 # length(intersect(colnames(data_HS_imputed), colnames(data_HS_original)))
+# intersect(colnames(data_HS_imputed), colnames(data_AF_imputed))
 
 # Function for converting a specified dependent variable into factor levels
 Y_factor <- function(dataset_column) {
@@ -82,12 +88,13 @@ Y_factor <- function(dataset_column) {
 data_HS_original$warstds <- Y_factor(data_HS_original$warstds)
 data_HS_imputed$warstds <- Y_factor(data_HS_imputed$warstds)
 data_AM_imputed$warstds <- Y_factor(data_AM_imputed$warstds)
+data_AF_imputed$warstds <- Y_factor(data_AF_imputed$warstds)
 
 # Visualize countries with civil war for each dataset
 data(wrld_simpl)
-HS_original_countries = wrld_simpl@data$NAME %in% 
+HS_original_countries <- wrld_simpl@data$NAME %in% 
   data_HS_original[data_HS_original$warstds=='war',]$country
-AM_imputed_countries = wrld_simpl@data$NAME %in% 
+AM_imputed_countries <- wrld_simpl@data$NAME %in% 
   data_AM_imputed[data_AM_imputed$warstds=='war',]$country
 
 plot(wrld_simpl, col=c(gray(.80),"red")[HS_original_countries+1], 
@@ -98,9 +105,9 @@ plot(wrld_simpl, col=c(gray(.80),"red")[AM_imputed_countries+1],
 
 There are a few questions that remained unanswered after replicating the data reading and processing done by authors. 
 
-The reported presentation data frame above shows that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. Obviously, this dataset is dropped from now on as it doesn't contain any entries. ```HS_imputed```, the dataset imputed by authors on the other hand, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. Lastly, the second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values.
+The reported presentation data frame above shows that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. Obviously, this dataset is dropped from now on as it doesn't contain any entries. ```HS_imputed```, the dataset imputed by authors on the other hand, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. The second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values. Lastly, the third dataset imputed by authors, denoted ```AF_imputed```, has 737 examples, 11 features, and 0 cells containing missing (NA) values. This dataset is also dropped, because i) no country information exists whatsoever on examples, and more importantly ii) none of the features (columns) in this dataset match with any of the other features in the other datasets (except the dependent variable). 
 
-It is also unclear why the paper needs two different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. 
+It is also unclear why the paper needs two different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. On the contrary, the authors have only used in-sample metric to report the accuracies of the models, hence the reported accuracies don't really say much. In order to assess performance, we have to test our models for out-of-sample data.
 
 # Model Specifications
 
@@ -202,7 +209,7 @@ model_FL_uncorrected <- train(FL_spec,
 
 #summary(model_FL_uncorrected) ## provides coefficients & traditional R model output
 #model_FL_uncorrected ## provides CV summary stats
-confusionMatrix(model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
+#confusionMatrix(model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
 
 # Fearon and Laitin LR Model (2003) Penalized
 model_FL_penalized <- train(FL_spec,
@@ -210,17 +217,74 @@ model_FL_penalized <- train(FL_spec,
                             trControl=tc, data=data_HS_imputed)
 #summary(model_FL_penalized)
 #model_FL_penalized
-confusionMatrix(model_FL_penalized, norm="average")
+#confusionMatrix(model_FL_penalized, norm="average")
 
 # Random Forest Model on Fearon and Laitin (2003) specification
 model_FL_RF <- train(FL_spec,
                      metric="ROC", method="rf",
-                     # sampsize=c(30,90), ## downsampling the DV
                      trControl=tc, data=data_HS_imputed)
 #summary(model_FL_RF)
 #model_FL_RF
-confusionMatrix(model_FL_RF, norm="average")
+#confusionMatrix(model_FL_RF, norm="average")
+```
 
+
+```{r LR-vs-RF-on-CH-specification}
+set.seed(666) ## the most metal seed for CV
+
+# Collier and Hoeffler LR Model (2004) Uncorrected
+model_CH_uncorrected <- train(CH_spec,
+                              metric="ROC", method="glm", family="binomial", 
+                              trControl=tc, data=data_HS_imputed)
+
+#summary(model_CH_uncorrected) ## provides coefficients & traditional R model output
+#model_CH_uncorrected ## provides CV summary stats
+#confusionMatrix(model_CH_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Collier and Hoeffler LR Model (2004) Penalized
+model_CH_penalized <- train(CH_spec,
+                            metric="ROC", method="plr", # Firth's penalized LR
+                            trControl=tc, data=data_HS_imputed)
+#summary(model_CH_penalized)
+#model_CH_penalized
+#confusionMatrix(model_CH_penalized, norm="average")
+
+# Random Forest Model on Collier and Hoeffler (2004) specification
+model_CH_RF <- train(CH_spec,
+                     metric="ROC", method="rf",
+                     trControl=tc, data=data_HS_imputed)
+#summary(model_CH_RF)
+#model_CH_RF
+#confusionMatrix(model_CH_RF, norm="average")
+```
+
+```{r LR-vs-RF-on-HS-specification}
+set.seed(666) ## the most metal seed for CV
+
+# Hegre and Sambanis LR Model (2006) Uncorrected
+model_HS_uncorrected <- train(HS_spec,
+                              metric="ROC", method="glm", family="binomial", 
+                              trControl=tc, data=data_HS_imputed)
+
+#summary(model_HS_uncorrected) ## provides coefficients & traditional R model output
+#model_HS_uncorrected ## provides CV summary stats
+#confusionMatrix(model_HS_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Hegre and Sambanis LR Model (2006) Penalized
+model_HS_penalized <- train(HS_spec,
+                            metric="ROC", method="plr", # Firth's penalized LR
+                            trControl=tc, data=data_HS_imputed)
+#summary(model_HS_penalized)
+#model_HS_penalized
+#confusionMatrix(model_HS_penalized, norm="average")
+
+# Random Forest Model on Hegre and Sambanis (2006) specification
+model_HS_RF <- train(HS_spec,
+                     metric="ROC", method="rf",
+                     trControl=tc, data=data_HS_imputed)
+#summary(model_HS_RF)
+#model_HS_RF
+#confusionMatrix(model_HS_RF, norm="average")
 ```
 
 # Dependencies Summary
