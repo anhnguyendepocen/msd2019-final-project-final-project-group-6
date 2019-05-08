@@ -323,19 +323,19 @@ model_AS_uncorrected <- train(author_spec,
 #model_AS_uncorrected ## provides CV summary stats
 #confusionMatrix(model_AS_uncorrected, norm="average") ## confusion matrix for predicted classes
 
-# Author specification (2016) LR Model Penalized
-model_AS_penalized <- train(author_spec,
-                            metric="ROC", method="plr", # Firth's penalized LR
-                            trControl=tc, data=data_train)
+# Author specification (2016) LR Model Penalized (TAKING TOO LONG FOR SOME REASON...)
+# model_AS_penalized <- train(author_spec,
+#                             metric="ROC", method="plr", # Firth's penalized LR
+#                             trControl=tc, data=data_train)
 #summary(model_AS_penalized)
 #model_AS_penalized
 #confusionMatrix(model_AS_penalized, norm="average")
 
-# Random Forest Model on author specification (2016)
-model_AS_RF <- train(author_spec,
-                     metric="ROC", method="rf",
-                     importance=T, ## Variable importance measures retained
-                     trControl=tc, data=data_train)
+# Random Forest Model on author specification (2016) (TAKING TOO LONG FOR SOME REASON...)
+# model_AS_RF <- train(author_spec,
+#                      metric="ROC", method="rf",
+#                      importance=T, ## Variable importance measures retained
+#                      trControl=tc, data=data_train)
 #summary(model_AS_RF)
 #model_AS_RF
 #confusionMatrix(model_AS_RF, norm="average")
@@ -410,8 +410,85 @@ varImpPlot(AS_RF_smoted, sort=T, type=2,
            n.var=num_vars)
 ```
 
+# Model Testing
+The paper includes a graph for comparing training AUC for uncorrected logistic regression models vs. the random forest model and a seperate graph for comparing the same metric for penalized logistic regression models vs. the random forest model. The problem with this approach is that, each of these model have different specifications and hence different numbers of features they are trained on. As discussed before, the random forest model even included downsampling which makes the comparison even less reliable due to possible overfitting. 
 
+Here, we propose that we compare ROC curves and AUC scores for each of the specifications independently. With this method, we will be able to assess the performance of random forest algorithm in comparison to uncorrected & penalized logistic regression models in a more reliable way. We realize that the out-of-sample testing data contains a low number of examples, however this approach is still better than comparing training accuracies. Furthermore, this is due to the nature of this problem and the difficulty of data gathering associated with it. 
 
+For each of the 3 models used for each of the 5 specifications and, we will predict with i) type="raw"
+for number/class of predictions to be used in confusion matrices, and ii) type="prob" for class probabilities to be used with ROC curves and computation of AUC metric.
+```{r testing-trained-models-on-out-of-sample-data}
+# Testing/predictions for Fearon and Laitin specification (2003)
+FL_uncorrected_pred_raw <- predict(model_FL_uncorrected, newdata=data_test, type="raw")
+FL_uncorrected_pred_prob <- predict(model_FL_uncorrected, newdata=data_test, type="prob")
+FL_penalized_pred_raw <- predict(model_FL_penalized, newdata=data_test, type="raw")
+FL_penalized_pred_prob <- predict(model_FL_penalized, newdata=data_test, type="prob")
+FL_RF_pred_raw <- predict(model_FL_RF, newdata=data_test, type="raw")
+FL_RF_pred_prob <- predict(model_FL_RF, newdata=data_test, type="prob")
+
+# Testing/predictions for Collier and Hoeffler specification (2004)
+CH_uncorrected_pred_raw <- predict(model_CH_uncorrected, newdata=data_test, type="raw")
+CH_uncorrected_pred_prob <- predict(model_CH_uncorrected, newdata=data_test, type="prob")
+CH_penalized_pred_raw <- predict(model_CH_penalized, newdata=data_test, type="raw")
+CH_penalized_pred_prob <- predict(model_CH_penalized, newdata=data_test, type="prob")
+CH_RF_pred_raw <- predict(model_CH_RF, newdata=data_test, type="raw")
+CH_RF_pred_prob <- predict(model_CH_RF, newdata=data_test, type="prob")
+
+# Testing/predictions for Hegre and Sambanis specification (2006)
+HS_uncorrected_pred_raw <- predict(model_HS_uncorrected, newdata=data_test, type="raw")
+HS_uncorrected_pred_prob <- predict(model_HS_uncorrected, newdata=data_test, type="prob")
+HS_penalized_pred_raw <- predict(model_HS_penalized, newdata=data_test, type="raw")
+HS_penalized_pred_prob <- predict(model_HS_penalized, newdata=data_test, type="prob")
+HS_RF_pred_raw <- predict(model_HS_RF, newdata=data_test, type="raw")
+HS_RF_pred_prob <- predict(model_HS_RF, newdata=data_test, type="prob")
+
+# Testing/predictions for author specification (2016)
+AS_uncorrected_pred_raw <- predict(model_AS_uncorrected, newdata=data_test, type="raw")
+AS_uncorrected_pred_prob <- predict(model_AS_uncorrected, newdata=data_test, type="prob")
+# AS_penalized_pred_raw <- predict(model_AS_penalized, newdata=data_test, type="raw")
+# AS_penalized_pred_prob <- predict(model_AS_penalized, newdata=data_test, type="prob")
+# AS_RF_pred_raw <- predict(model_AS_RF, newdata=data_test, type="raw")
+# AS_RF_pred_prob <- predict(model_AS_RF, newdata=data_test, type="prob")
+
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
+```
+
+```{r confusion-matrices}
+# Confusion matrices for prediction with Fearon and Laitin specification (2003)
+table(pred=FL_uncorrected_pred_raw, obs=data_test$warstds)
+table(pred=FL_penalized_pred_raw, obs=data_test$warstds)
+table(pred=FL_RF_pred_raw, obs=data_test$warstds)
+
+# Confusion matrices for prediction with Collier and Hoeffler specification (2004)
+table(pred=CH_uncorrected_pred_raw, obs=data_test$warstds)
+table(pred=CH_penalized_pred_raw, obs=data_test$warstds)
+table(pred=CH_RF_pred_raw, obs=data_test$warstds)
+
+# Confusion matrices for prediction with Hegre and Sambanis specification (2006)
+table(pred=HS_uncorrected_pred_raw, obs=data_test$warstds)
+table(pred=HS_penalized_pred_raw, obs=data_test$warstds)
+table(pred=HS_RF_pred_raw, obs=data_test$warstds)
+
+# Confusion matrices for prediction with author specification (2016)
+table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
+# table(pred=AS_penalized_pred_raw, obs=data_test$warstds)
+# table(pred=AS_RF_pred_raw, obs=data_test$warstds)
+
+# Confusion matrices for prediction with author specification (2016) trained on SMOTEd dataset
+table(pred=AS_uncorrected_smoted_pred_raw, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
+```
+
+```{r seperation-plots}
+
+```
 
 
 # Dependencies Summary
