@@ -36,30 +36,31 @@ registerDoMC(cores=7) ## distributing workload over multiple cores for faster co
 Prediction is at the heart of many machine learning and data science applications, and its importance is amplified in the context of political science. Especially for the case of civil war onset, robust models that can make correct predictions has the potential to save millions of lives and guide political agendas for the years to come.
 
 ## Paper Description
-Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al. is an explaratory research paper that, among several other things, makes the argument that most well-known logistic models acquire relatively lower predictive powers for civil war onsets, and shows that a custom random forest model achieves much higer prediction accuricies.
+Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al. is an explaratory research paper that, among several other things, makes the argument that most well-known logistic models acquire relatively lower predictive powers for civil war onsets, and shows that a custom random forest model achieves much higer prediction accuracies.
 
 ## Replication Description
-The replication for the paper mentioned will consist of two main parts, which will go parallel to each other as represented in this R Notebook. The first part will deal with extracting code snippets from the original R code (found in ```original_code/```), and questioning the reasonability and correctness of the methods and code semantics used, as well as an effort to see if results can be completely replicated. The second part will deal with suggesting improvements, modifications, and eventually corrections to the original R code, where we will try to report summaries of each model using fair metrics and correct methodologies. 
+The replication for the paper mentioned will consist of two main parts, which will go parallel to each other as represented in this R Notebook. The first part will deal with extracting code snippets from the original R code (found in ```original_code/```), and questioning the reasonability and correctness of the methods and code semantics used, as well as an effort to see if results can be completely replicated. The second part will deal with suggesting improvements, modifications, and eventually corrections to the original R code, where we will try to report summaries of each model using fair metrics and correct methodologies. Comments included with double hashcodes (```##```) corresponds to comments made by authors themselves.
 
-Later, a third part will deal with suggesting new models...
+Later, a third part will deal with suggesting new models like neural networks and custom decision trees.
 
 # Data Exploration
-```{r data-reading-and-exploration}
+
+## Importing Datasets
+```{r data-importing}
 # HS_original: Civil War Data by Hegre and Sambanis (2006), the original version
 data_HS_original <- read.dta(file="data/Sambanis (Aug 06).dta")
-
 # HS_cleaned: Civil War Data by Hegre and Sambanis (2006), NAs eliminated version
 data_HS_cleaned <- na.omit(data_HS_original)
-
 # HS_imputed: Civil War Data by Hegre and Sambanis (2006), imputed by authors
 data_HS_imputed <- read.csv(file="data/SambnisImp.csv") ## data for prediction
-
 # AM_imputed: Amelia dataset imputed by authors
 data_AM_imputed <- read.csv(file="data/Amelia.Imp3.csv") ## data for causal machanisms
-
 # AF_imputed: Africa dataset imputed by authors
 data_AF_imputed <- read.csv(file="data/AfricaImp.csv")
+```
 
+## Dataset Exploration and Comparison
+```{r data-exploration-and-comparison}
 data_presentation <- matrix(c(ncol(data_HS_original), sum(is.na(data_HS_original)),
                               nrow(data_HS_original),
                               ncol(data_HS_cleaned), sum(is.na(data_HS_cleaned)),
@@ -79,7 +80,10 @@ as.data.frame(data_presentation)
 # setdiff(colnames(data_HS_imputed), colnames(data_HS_original))
 # length(intersect(colnames(data_HS_imputed), colnames(data_HS_original)))
 # intersect(colnames(data_HS_imputed), colnames(data_AF_imputed))
+```
 
+## Data Visualization
+```{r data-visualization}
 # Function for converting a specified dependent variable into factor levels
 Y_factor <- function(dataset_column) {
   return(factor(dataset_column, levels=c(0,1), labels=c("peace", "war")))
@@ -104,12 +108,22 @@ plot(wrld_simpl, col=c(gray(.80),"red")[AM_imputed_countries+1],
      main='Imputed Amelia Dataset')
 ```
 
-There are a few questions that remained unanswered after replicating the data reading and processing done by authors. 
+## Data Insights and Moving Forward
+There are a few questions left unanswered after replicating the data importing and processing done by authors. Below we represent the comparisons of various datasets mentioned in the paper and the original R code, and give insights about our reasoning.
 
-The reported presentation data frame above shows that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. Obviously, this dataset is dropped from now on as it doesn't contain any entries. ```HS_imputed```, the dataset imputed by authors on the other hand, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. The second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values. Lastly, the third dataset imputed by authors, denoted ```AF_imputed```, has 737 examples, 11 features, and 0 cells containing missing (NA) values. This dataset is also dropped, because i) no country information exists whatsoever on examples, and more importantly ii) none of the features (columns) in this dataset match with any of the other features in the other datasets (except the dependent variable). 
+* The reported comparison data frame highlights that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. 
+* The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. Naturally, this dataset is **dropped** from now on as it doesn't contain any entries. 
+* The dataset imputed by authors on the other hand, denoted ```HS_imputed```, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. 
+* The second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values. 
+* Lastly, the third dataset imputed by authors, denoted ```AF_imputed```, has 737 examples, 11 features, and 0 cells containing missing (NA) values. This dataset is also **dropped**, because 
+    i) no country information exists whatsoever, and more importantly 
+    ii) none of the features (columns) in this dataset match with any of the other features in the         other datasets (except the dependent variable). 
 
-It is also unclear why the paper needs two different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. On the contrary, the authors have only used in-sample metric to report the accuracies of the models, hence the reported accuracies don't really say much. In order to assess performance, we have to test our models for out-of-sample data.
+It is also unclear why the paper needs three different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. 
 
+For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. Moreover, the authors have only used an in-sample accuracy metric to report the performance of their models which couldn't be inferred from the paper. Hence, the reported performance measures on the paper don't really give us much insight into how these models might behave with unseen data. In order to assess performance, we have to test our models for **out-of-sample data**. Before generating this out-of-sample data, let's try to understand the difference between the datasets used by authors through an exploration of the respective numbers of binary classes in each dataset.
+
+## Exploration of Class Imbalance in Datasets
 ```{r class-imbalance-exploration}
 # Explore class imbalance
 table(data_HS_original$warstds)
@@ -118,31 +132,12 @@ table(data_AM_imputed$warstds)
 table(data_AF_imputed$warstds)
 ```
 
-With the first three reported tables, it seems that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine i) down-sampling from the majority class or ii) up-sampling from the minority class would be the reasonable action, rather than increasing the number of examples of the majority class. Hence, we will implement these two techniques, i) and ii), and see if they yield better results.
+It can be inferred that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine 
+  i) down-sampling from the majority class or 
+  ii) up-sampling from the minority class would be the reasonable action, 
+rather than increasing the number of examples of the majority class. We will implement these two techniques, i) and ii), and see if they yield better results.
 
-SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation) Hence, it is a combination of i) and ii).
-
-# Data Processing, SMOTE, and Training/Test Split for Accurate Assessment
-Based on our exploration, we will drop every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years 1945-1990 will construct the training set, whereas examples after 1990 will construct the testing set.
-
-```{r data-processing-and-split}
-# Perform the split
-split_year <- 1990
-data_train <- data_HS_imputed[data_HS_imputed$year <= split_year, ]
-data_test <- data_HS_imputed[data_HS_imputed$year > split_year, ]
-
-# Observe class-imbalance in training and testing sets
-table(data_train$warstds)
-table(data_test$warstds)
-
-# Since we are done with visualizations and exploration, refactor the dependent variable
-data_train$warstds <- as.factor(data_train$warstds)
-data_test$warstds <- as.factor(data_test$warstds)
-
-# SMOTE for artificially creating a more balanced training dataset
-data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100)
-table(data_train_balanced$warstds)
-```
+SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation) It is a combination of i) and ii).
 
 # Model Specifications
 To keep track of model specifications which use different numbers and types of features based on either theory or computations, we propose that we explicitly define features and hence accompanying formulas to be used by models later in this next code block. The 4 specifications the paper have covered are:
@@ -152,6 +147,7 @@ To keep track of model specifications which use different numbers and types of f
 3) Hegre and Sambanis specification (2006) consisting of 20 variables
 4) The authors' specifications consisting of 88 variables, selected from Sambanis (2006) index
 
+## Feature Selection Based on Model Specifications
 ```{r data-feature-selection}
 # Function to generate a formula given dependent variable label and features
 # Ex: get_model_formula('height', c('age', 'weight')) : height ~ age + weight
@@ -201,7 +197,46 @@ HS_vars <- c("lpopns", "ln_gdpen", "inst3", "parreg", "geo34", "proxregc", "gdpg
 HS_spec <- get_model_formula(y_var, HS_vars)
 ```
 
-Below is the setup to be run before training. We are not changing anything here. One thing to look for is that we will set the seed for each caret training function call, so that all of the results presented here are replicable. The original code by the authors only set the seed once, which unfortunately makes their results unreplicable.
+# Data Processing
+Based on our exploration, we will **drop** every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the missing values and variables in other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years *1945-1990* will construct the training set, whereas examples after *1990* will construct the testing set.
+
+## Removing Unused Columns
+```{r data-processing}
+# Specify extra variables to keep apart from specifications mentioned in the previous segment
+extra_vars <- c(y_var, "year", "cid")
+all_vars <- unique(c(author_vars, FL_vars, CH_vars, HS_vars, extra_vars))
+# Remove unwanted columns and specify chosen dataset
+data <- data_HS_imputed[,all_vars]
+ncol(data) # debugging
+```
+
+## Training/Test Split for Accurate Assessment
+```{r data-split}
+# Perform the split
+split_year <- 1990
+data_train <- data[data$year <= split_year,]
+data_test <- data[data$year > split_year,]
+
+# Observe class-imbalance in training and testing sets
+table(data_train$warstds)
+table(data_test$warstds)
+
+# Since we are done with visualizations and exploration, refactor the dependent variable
+data_train$warstds <- as.factor(data_train$warstds)
+data_test$warstds <- as.factor(data_test$warstds)
+```
+
+## SMOTE
+```{r smote}
+# SMOTE for artificially creating a more balanced training dataset
+data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100)
+table(data_train_balanced$warstds)
+```
+
+# Model Training
+
+## Training Setup
+Below is the setup to be run before training. We are not changing much from the original R code here. One thing to look for is that, we will set the seed for each caret training function call in order to present results that are replicable. The original code by the authors only set the seed once, which in turn makes some their results unreplicable.
 
 ```{r setup-before-training}
 set.seed(666) ## the most metal seed for CV
@@ -217,11 +252,14 @@ tc <- trainControl(method="cv",
                    classProb=T)
 ```
 
-Now that everything is set up, we will train and test logistic regression and random forest models (* only in-sample as of now) using the 4 specifications mentioned previously, one at a time. A problem we saw with the original implementation was that the random forest training commented out included an option for down-sampling, whereas the other logistic regression models didn't have this option specified. This has the potential to yield unfair comparisons, hence we removed down-sampling. For dealing with class-imbalance, we will train models with our SMOTEd dataset later and test them on unseen, original (not artifically generated by SMOTE) data.
+## Training Insights
+A major problem we noticed with the original implementation was that the initially commented out random forest training process included an option for down-sampling, whereas the other logistic regression training processes didn't have this option specified. 
 
-# Model Training
-We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train the author specification (88 variables) with the ```data_train_balanced``` dataset. For each of the 5 versions of training, we will include a i) logistic regression model (LR) with uncorrected logits, ii) a logistic regression model (LR) with penalized logits using Firth's method, and iii) a random forest model (RF). All of the models use the cross-validation training control, ```tc```, implemented in the above code block.
+This has the potential to yield unfair comparisons, so we decided to remove down-sampling option. For dealing with class-imbalance, we will train models with our SMOTEd dataset later and test them on unseen, original (not artifically generated by SMOTE) data.
 
+We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train a fifth instance with author specification (88 variables), but instead on the ```data_train_balanced``` dataset this time. For each of the 5 instances of training, we will include a i) logistic regression model (LR) with uncorrected logits, ii) a logistic regression model (LR) with penalized logits using Firth's method, and iii) a random forest model (RF). All of the models use the cross-validation training control, ```tc```, implemented in the above code block.
+
+## Training Processes
 1) Fearon and Laitin specification (2003) consisting of 11 variables
 ```{r LR-vs-RF-on-FL-specification}
 set.seed(666) ## the most metal seed for CV
@@ -373,23 +411,30 @@ model_AS_RF_smoted <- train(author_spec,
 #confusionMatrix(model_AS_RF_smoted, norm="average")
 ```
 
-# Variable Importance Visualization for Random Forest Models
-One advantage of the Random Forests algorithm is that it is easy to interpret, robust to outliers and noise, and allows the analyst to infer causal mechanisms. Although the paper has serious methodological flaws, its suggestion of Random Forests is well-grounded. The original R code by authors visualizes the variable importance for a Random Forest Model trained on the ```data_AM_imputed``` dataset, however we dropped that dataset as discussed before. It makes the most sense to visualize the variable importance on the 5 different random forest models we trained above, 4 on ```data_train``` and 1 on ```data_train_balanced```. By doing this, we can achieve: i) See if theories suggested by different parties on theoretical variables deciding a civil war onset agree with our findings or not, ii) Observe if any variables are deemed to be `unimportant` by the algorithm, and finally iii) Observe the difference of variable importance on random forests models trained on original training set and artifically created training set, and see how the SMOTE algorithms affects this measure.
+# Variable Importance for Random Forest Models
+One advantage of the Random Forests algorithm is that it is easy to interpret, robust to outliers and noise, and allows the analyst to infer causal mechanisms. Although the paper has serious methodological flaws, we think that its suggestion of Random Forests is well-grounded. The original R code by authors visualizes the variable importance for a Random Forest Model trained on the ```data_AM_imputed``` dataset, however we **dropped** that dataset as discussed before. It makes the most sense to us to visualize the variable importance on the 5 different random forest models we trained in the previous segment, 4 on ```data_train``` and 1 on ```data_train_balanced``` to be exact. By doing this, we can achieve: 
 
-Firstly, we will retrain random forest models with the same specs and data mentioned above, but with ```randomForests()``` class this same in order to plot importance of variables.
+  i) See if theories suggested by different parties on theoretical variables deciding a civil war onset   agree with our findings or not, 
+  ii) Observe if any variables are deemed to be `unimportant` by the random forest algorithm, measured   by mean decrease in Gini classification measure in the case that they are not considered in training,   iii) Observe the difference of variable importance on random forests models trained on original        training set and artifically created training set, and essentially see how the SMOTE algorithms        affects this measure.
+
+## Retraining Random Forest Models
+Firstly, we will retrain random forest models with the same specs and data mentioned above, but with ```randomForests()``` class this same in order to plot importance of variables. Note that these models will only be used to visualize variable importance, and will be dropped later in order to not cause any confusion.
+
 ```{r retraining-RF-models}
-FL_RF <- randomForest(FL_spec, importance=T, proximity=F, ntree=1000, 
+num_trees <- 1000
+FL_RF <- randomForest(FL_spec, importance=T, proximity=F, ntree=num_trees, 
                       confusion=T, err.rate=T, data=data_train)
-CH_RF <- randomForest(CH_spec, importance=T, proximity=F, ntree=1000, 
+CH_RF <- randomForest(CH_spec, importance=T, proximity=F, ntree=num_trees, 
                       confusion=T, err.rate=T, data=data_train)
-HS_RF <- randomForest(HS_spec, importance=T, proximity=F, ntree=1000, 
+HS_RF <- randomForest(HS_spec, importance=T, proximity=F, ntree=num_trees, 
                       confusion=T, err.rate=T, data=data_train)
-AS_RF <- randomForest(author_spec, importance=T, proximity=F, ntree=1000, 
+AS_RF <- randomForest(author_spec, importance=T, proximity=F, ntree=num_trees, 
                       confusion=T, err.rate=T, data=data_train)
-AS_RF_smoted <- randomForest(author_spec, importance=T, proximity=F, ntree=1000, 
+AS_RF_smoted <- randomForest(author_spec, importance=T, proximity=F, ntree=num_trees, 
                              confusion=T, err.rate=T, data=data_train_balanced)
 ```
 
+## Visualizing Variable Importances
 Now, we can visualize the variable importances for each of the random forest models trained above.
 ```{r variable-importance-based-on-RF-models}
 # Specify maximum number of variables (features) to be displayed
@@ -412,12 +457,16 @@ varImpPlot(AS_RF_smoted, sort=T, type=2,
 ```
 
 # Model Testing
-The paper includes a graph for comparing training AUC for uncorrected logistic regression models vs. the random forest model and a seperate graph for comparing the same metric for penalized logistic regression models vs. the random forest model. The problem with this approach is that, each of these model have different specifications and hence different numbers of features they are trained on. As discussed before, the random forest model even included downsampling which makes the comparison even less reliable due to possible overfitting. 
+## Testing Insights
+The paper includes a graph for comparing training AUC for uncorrected logistic regression models versus the random forest model, and a seperate graph for comparing the same metric for penalized logistic regression models versus the random forest model. The immediately noticable problem with this approach is that, each of these model have different specifications and hence different numbers of features they are trained on. As discussed before, the random forest model included downsampling which made the comparison even less reliable due to possible overfitting. 
 
-Here, we propose that we compare ROC curves and AUC scores for each of the specifications independently. With this method, we will be able to assess the performance of random forest algorithm in comparison to uncorrected & penalized logistic regression models in a more reliable way. We realize that the out-of-sample testing data contains a low number of examples, however this approach is still better than comparing training accuracies. Furthermore, this is due to the nature of this problem and the difficulty of data gathering associated with it. 
+Here, we propose that we compare ROC curves and AUC scores for each of the specifications on **out-of-sample** data independently. With this methodology, we will be able to assess the performance of random forest algorithm in comparison to uncorrected & penalized logistic regression models in a more reliable way. We realize that the out-of-sample testing data contains a low number of examples, however this approach is still better than comparing plain training accuracies. Furthermore, this is due to the nature of this problem and the difficulty of data gathering associated with it. 
 
-For each of the 3 models used for each of the 5 specifications and, we will predict with i) type="raw"
-for number/class of predictions to be used in confusion matrices, and ii) type="prob" for class probabilities to be used with ROC curves and computation of AUC metric.
+For each of the 3 models used for each of the 5 specifications and, we will use the ```predict()``` function with:
+  i) type="raw" for number/class of predictions to be used in confusion matrices, and 
+  ii) type="prob" for class probabilities to be used with ROC curves and computation of AUC metric.
+
+## Prediction Processes
 ```{r testing-trained-models-on-out-of-sample-data}
 # Testing/predictions for Fearon and Laitin specification (2003)
 FL_uncorrected_pred_raw <- predict(model_FL_uncorrected, newdata=data_test, type="raw")
@@ -460,6 +509,7 @@ AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="ra
 AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
 ```
 
+## Confusion Matrices
 Let's draw the confusion matrices for each instance.
 ```{r confusion-matrices}
 # Confusion matrices for prediction with Fearon and Laitin specification (2003)
@@ -488,6 +538,7 @@ table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
 ```
 
+## Seperation Plots
 Let's draw the seperation plots for each instance.
 ```{r seperation-plots}
 # Seperation plots for prediction with Fearon and Laitin specification (2003)
@@ -576,8 +627,15 @@ separationplot(AS_RF_smoted_pred_prob$war,
                height=1.5, col0="white", col1="black", newplot=F)
 ```
 
-Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: i) We can group by specifications and assess the performance difference between uncorrected logistic regression, penalized logistic regression, and random forest algorithm for each of the specifications, or ii) We can group by type of model and assess the performance difference in same models when different specifications with different numbers of variables and circumstances (SMOTE) applied. Here, we will represent both.
+## ROC Curves with AUC Scores
+Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: 
 
+  i) We can group by specifications and assess the performance difference between uncorrected logistic   regression, penalized logistic regression, and random forest algorithm for each of the                 specifications, or 
+  ii) We can group by type of model and assess the performance difference in same models when different   specifications with different numbers of variables and circumstances (SMOTE) applied. 
+
+Here, we will represent both.
+
+### Grouped By Specifications
 ```{r roc-curves-for-specs}
 # Set for square-grid ROC plots
 par(pty = "s")
@@ -672,6 +730,8 @@ legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
        text.col=c("blue","red","darkgreen"),
        cex = .75)
 ```
+
+### Grouped By Model Types
 ```{r roc-curves-for-models}
 # Set for square-grid ROC plots
 par(pty = "s")
@@ -714,8 +774,9 @@ sessionInfo()
 ```
 
 # References
+## Related Papers & Datasets
+## StackOverflow for the Rescue!
 * https://stackoverflow.com/questions/11225343/how-to-create-a-world-map-in-r-with-specific-countries-filled-in
 * https://stackoverflow.com/questions/20624698/fixing-set-seed-for-an-entire-session
 * https://stackoverflow.com/questions/42057979/proc-roc-curves-remove-empty-space
-
-
+* https://stackoverflow.com/questions/30491213/the-union-of-several-vectors
