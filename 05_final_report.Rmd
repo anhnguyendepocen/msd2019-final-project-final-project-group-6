@@ -20,10 +20,13 @@ library(doMC)
 library(tidyverse)
 library(foreign) # for reading Stata .dta files
 library(maptools) # for displaying countries on world map
+library(DMwR) # for up-sampling with SMOTE
 
 theme_set(theme_bw())
 
 knitr::opts_chunk$set(echo = TRUE)
+
+registerDoMC(cores=7) ## distributing workload over multiple cores for faster computaiton
 ```
 
 # Introduction
@@ -40,7 +43,6 @@ The replication for the paper mentioned will consist of two main parts, which wi
 Later, a third part will deal with suggesting new models...
 
 # Data Exploration
-
 ```{r data-reading-and-exploration}
 # HS_original: Civil War Data by Hegre and Sambanis (2006), the original version
 data_HS_original <- read.dta(file="data/Sambanis (Aug 06).dta")
@@ -88,46 +90,146 @@ HS_original_countries = wrld_simpl@data$NAME %in%
 AM_imputed_countries = wrld_simpl@data$NAME %in% 
   data_AM_imputed[data_AM_imputed$warstds=='war',]$country
 
-plot(wrld_simpl, col = c(gray(.80), "red")[HS_original_countries+1])
-plot(wrld_simpl, col = c(gray(.80), "blue")[AM_imputed_countries+1])
-
+plot(wrld_simpl, col=c(gray(.80),"red")[HS_original_countries+1], 
+     main='Original Hegre and Sambanis (2006)')
+plot(wrld_simpl, col=c(gray(.80),"red")[AM_imputed_countries+1],
+     main='Imputed Amelia Dataset')
 ```
 
 There are a few questions that remained unanswered after replicating the data reading and processing done by authors. 
 
-The reported presentation data frame above shows that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. ```HS_imputed```, the dataset imputed by authors on the other hand, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. Lastly, the second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values.
+The reported presentation data frame above shows that the original Hegre and Sambanis (2006) dataset, denoted by ```HS_original```, has 9691 examples, 284 features, and 979981 cells containing missing (NA) values. The dataset that is constructed by ourselves when these cells were omitted, ```HS_cleaned```, shows that every single row of the original dataset contains some missing values. Obviously, this dataset is dropped from now on as it doesn't contain any entries. ```HS_imputed```, the dataset imputed by authors on the other hand, has 7140 examples, 286 features, and 0 cells containing missing (NA) values. It is unclear and unmentioned how and why the authors have imputed this dataset, filled all cells with missing values, and deleted ~2500 examples from the original dataset. Lastly, the second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values.
 
 It is also unclear why the paper needs two different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. 
 
-```{r data-processing}
-# The 88 variables selected by authors from Sambanis (2006) Appendix
-vars <- c("warstds", "ager", "agexp", "anoc", "army85", "autch98", "auto4",
-          "autonomy", "avgnabo", "centpol3", "coldwar", "decade1", "decade2",
-          "decade3", "decade4", "dem", "dem4", "demch98", "dlang", "drel",
-          "durable", "ef", "ef2", "ehet", "elfo", "elfo2", "etdo4590",
-          "expgdp", "exrec", "fedpol3", "fuelexp", "gdpgrowth", "geo1", "geo2",
-          "geo34", "geo57", "geo69", "geo8", "illiteracy", "incumb", "infant",
-          "inst", "inst3", "life", "lmtnest", "ln_gdpen", "lpopns", "major", "manuexp", 
-          "milper", "mirps0", "mirps1", "mirps2", "mirps3", "nat_war", "ncontig",
-          "nmgdp", "nmdp4_alt", "numlang", "nwstate", "oil", "p4mchg",
-          "parcomp", "parreg", "part", "partfree", "plural", "plurrel",
-          "pol4", "pol4m", "pol4sq", "polch98", "polcomp", "popdense",
-          "presi", "pri", "proxregc", "ptime", "reg", "regd4_alt", "relfrac", "seceduc",
-          "second", "semipol3", "sip2", "sxpnew", "sxpsq", "tnatwar", "trade",
-          "warhist", "xconst")
+# Model Specifications
+
+To keep track of model specifications which use different numbers and types of features based on either theory or computations, we propose that we explicitly define features and hence accompanying formulas to be used by models later in this next code block. The 4 specifications the paper have covered are:
+
+1) Their own specifications consisting of 88 variables, selected from Sambanis (2006) index
+2) Fearon and Laitin specification (2003) consisting of 11 variables
+3) Collier and Hoeffler specification (2004) consisting of 12 variables
+4) Hegre and Sambanis specification (2006) consisting of 20 variables
+
+```{r data-feature-selection}
+# Function to generate a formula given dependent variable label and features
+# Ex: get_model_formula('height', c('age', 'weight')) : height ~ age + weight
+get_model_formula <- function(label, feature_vector) {
+  formula_string <- ""
+  for (feature in feature_vector) {
+    formula_string <- paste(formula_string, feature, "+")
+  }
+  formula_string <- substring(formula_string, 1, nchar(formula_string)-1)
+  return(as.formula(paste(paste(label, "~"), formula_string)))
+}
+
+# Specify the dependent variable that will be predicted in all models
+y_var <- "warstds"
+
+# The 88 variables selected by authors from Sambanis (2006) Appendix as spec of their RF model
+author_vars <- c("ager", "agexp", "anoc", "army85", "autch98", "auto4",
+                 "autonomy", "avgnabo", "centpol3", "coldwar", "decade1", "decade2",
+                 "decade3", "decade4", "dem", "dem4", "demch98", "dlang", "drel",
+                 "durable", "ef", "ef2", "ehet", "elfo", "elfo2", "etdo4590",
+                 "expgdp", "exrec", "fedpol3", "fuelexp", "gdpgrowth", "geo1", "geo2",
+                 "geo34", "geo57", "geo69", "geo8", "illiteracy", "incumb", "infant",
+                 "inst", "inst3", "life", "lmtnest", "ln_gdpen", "lpopns", "major", "manuexp",
+                 "milper", "mirps0", "mirps1", "mirps2", "mirps3", "nat_war", "ncontig",
+                 "nmgdp", "nmdp4_alt", "numlang", "nwstate", "oil", "p4mchg",
+                 "parcomp", "parreg", "part", "partfree", "plural", "plurrel",
+                 "pol4", "pol4m", "pol4sq", "polch98", "polcomp", "popdense",
+                 "presi", "pri", "proxregc", "ptime", "reg", "regd4_alt", "relfrac", 
+                 "seceduc", "second", "semipol3", "sip2", "sxpnew", "sxpsq", "tnatwar",
+                 "trade", "warhist", "xconst")
+author_spec <- get_model_formula(y_var, author_vars)
+
+# The 11 variables selected by Fearon and Laitin (2003) as spec of their LR model
+FL_vars <- c("warhist", "ln_gdpen", "lpopns", "lmtnest", "ncontig",
+             "oil", "nwstate", "inst3", "pol4", "ef", "relfrac")
+FL_spec <- get_model_formula(y_var, FL_vars)
+
+# The 12 variables selected by Collier and Hoeffler (2004) as spec of their LR model
+CH_vars <- c("sxpnew", "sxpsq", "ln_gdpen", "gdpgrowth", "warhist", "lmtnest", 
+             "ef", "popdense", "lpopns", "coldwar", "seceduc", "ptime")
+CH_spec <- get_model_formula(y_var, CH_vars)
+
+# The 20 variables selected by Hegre and Sambanis (2006) as spec of their LR model
+HS_vars <- c("lpopns", "ln_gdpen", "inst3", "parreg", "geo34", "proxregc", "gdpgrowth",
+             "anoc", "partfree", "nat_war", "lmtnest", "decade1", "pol4sq", "nwstate", 
+             "regd4_alt", "etdo4590", "milper", "geo1", "tnatwar", "presi")
+HS_spec <- get_model_formula(y_var, HS_vars)
 ```
 
 ```{r class-imbalance-exploration}
+# Explore class imbalance
 table(data_HS_original$warstds)
 table(data_HS_imputed$warstds)
 table(data_AM_imputed$warstds)
+
+# SMOTE for artificially creating a more balanced dataset
+data_HS_balanced <- SMOTE(warstds ~ ., data_HS_imputed, perc.over = 600, perc.under=100)
+table(data_HS_balanced$warstds)
 ```
 
-With these reported tables, it seems that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine i) down-sampling from the majority class or ii) up-sampling from the minority class would be the reasonable action, rather than increasing the number of examples of the majority class. Hence, we will implement these two techniques, i) and ii), and see if they yield better results.
+With the first three reported tables, it seems that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine i) down-sampling from the majority class or ii) up-sampling from the minority class would be the reasonable action, rather than increasing the number of examples of the majority class. Hence, we will implement these two techniques, i) and ii), and see if they yield better results.
 
+SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation) Hence, it is a combination of i) and ii).
 
-The following is a list of all packages used to generate these results. (Leave at very end of file.)
+Below is the setup to be run before training. We are not changing anything here. One thing to look for is that we will set the seed for each caret training function call, so that all of the results presented here are replicable. The original code by the authors only set the seed once, which unfortunately makes their results unreplicable.
+```{r setup-before-training}
+set.seed(666) ## the most metal seed for CV
 
+## This method of data slicing - or CV - will be used for all logit models
+tc <- trainControl(method="cv", 
+                   number=10, ## creates CV folds - 10 for this data
+                   summaryFunction=twoClassSummary, ## provides ROC stats in call to model
+                   classProb=T)
+
+# Since we are done with visualizations and exploration, refactor the dependent variable
+data_HS_imputed$warstds <- as.factor(data_HS_imputed$warstds)
+data_AM_imputed$warstds <- as.factor(data_AM_imputed$warstds)
+data_HS_balanced$warstds <- as.factor(data_HS_balanced$warstds)
+```
+
+Now that everything is set up, we will train and test logistic regression and random forest models (* only in-sample as of now) using the 4 specifications mentioned previously, one at a time. A problem we saw with the original implementation was that the random forest training commented out included an option for down-sampling, whereas the other logistic regression models didn't have this option specified. This has the potential to yield unfair comparisons, hence we removed down-sampling. For dealing with class-imbalance, we will train models with our SMOTEd dataset later and test them on unseen, original (not artifically generated by SMOTE) data.
+```{r LR-vs-RF-on-FL-specification}
+set.seed(666) ## the most metal seed for CV
+
+# Fearon and Laitin LR Model (2003) Uncorrected
+model_FL_uncorrected <- train(FL_spec,
+                              metric="ROC", method="glm", family="binomial", 
+                              trControl=tc, data=data_HS_imputed)
+
+#summary(model_FL_uncorrected) ## provides coefficients & traditional R model output
+#model_FL_uncorrected ## provides CV summary stats
+confusionMatrix(model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Fearon and Laitin LR Model (2003) Penalized
+model_FL_penalized <- train(FL_spec,
+                            metric="ROC", method="plr", # Firth's penalized LR
+                            trControl=tc, data=data_HS_imputed)
+#summary(model_FL_penalized)
+#model_FL_penalized
+confusionMatrix(model_FL_penalized, norm="average")
+
+# Random Forest Model on Fearon and Laitin (2003) specification
+model_FL_RF <- train(FL_spec,
+                     metric="ROC", method="rf",
+                     # sampsize=c(30,90), ## downsampling the DV
+                     trControl=tc, data=data_HS_imputed)
+#summary(model_FL_RF)
+#model_FL_RF
+confusionMatrix(model_FL_RF, norm="average")
+
+```
+
+# Dependencies Summary
+The following is a list of all packages used to generate these results.
 ```{r}
 sessionInfo()
 ```
+
+# References
+* https://stackoverflow.com/questions/11225343/how-to-create-a-world-map-in-r-with-specific-countries-filled-in
+* https://stackoverflow.com/questions/20624698/fixing-set-seed-for-an-entire-session
+
