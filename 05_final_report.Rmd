@@ -12,6 +12,8 @@ output:
 ```{r setup, include=FALSE}
 # Setting up dependencies
 library(randomForest) # for training RFs with variable importance
+library(rpart) # for training Decision Trees
+library(ada) # for training Boosted Classification Trees
 library(caret) # for training LR and RF models
 library(ROCR)
 library(pROC) # for plotting ROC curves
@@ -97,13 +99,13 @@ data_AF_imputed$warstds <- Y_factor(data_AF_imputed$warstds)
 
 # Visualize countries with civil war for each dataset
 data(wrld_simpl)
-HS_original_countries <- wrld_simpl@data$NAME %in% 
-  data_HS_original[data_HS_original$warstds=='war',]$country
+HS_original_countries <- wrld_simpl@data$NAME %in%    
+ data_HS_original[data_HS_original$warstds=='war',]$country   
 AM_imputed_countries <- wrld_simpl@data$NAME %in% 
   data_AM_imputed[data_AM_imputed$warstds=='war',]$country
 
-plot(wrld_simpl, col=c(gray(.80),"red")[HS_original_countries+1], 
-     main='Original Hegre and Sambanis (2006)')
+plot(wrld_simpl, col=c(gray(.80),"red")[HS_original_countries+1],    
+    main='Original Hegre and Sambanis (2006)')    
 plot(wrld_simpl, col=c(gray(.80),"red")[AM_imputed_countries+1],
      main='Imputed Amelia Dataset')
 ```
@@ -266,7 +268,7 @@ set.seed(666) ## the most metal seed for CV
 
 # Fearon and Laitin LR Model (2003) Uncorrected
 model_FL_uncorrected <- train(FL_spec,
-                              metric="ROC", method="glm", family="binomial", 
+                              metric="ROC", method="glm", family="binomial",
                               trControl=tc, data=data_train)
 
 #summary(model_FL_uncorrected) ## provides coefficients & traditional R model output
@@ -281,13 +283,46 @@ model_FL_penalized <- train(FL_spec,
 #model_FL_penalized
 #confusionMatrix(model_FL_penalized, norm="average")
 
-# Random Forest Model on Fearon and Laitin (2003) specification
+#Random Forest Model on Fearon and Laitin (2003) specification
 model_FL_RF <- train(FL_spec,
                      metric="ROC", method="rf",
                      trControl=tc, data=data_train)
+
+
 #summary(model_FL_RF)
 #model_FL_RF
 #confusionMatrix(model_FL_RF, norm="average")
+```
+
+```{r pred-test}
+
+# Testing/predictions for Fearon and Laitin specification (2003)
+FL_uncorrected_pred_raw <- predict(model_FL_uncorrected, newdata=data_test, type="raw")
+FL_uncorrected_pred_prob <- predict(model_FL_uncorrected, newdata=data_test, type="prob")
+FL_penalized_pred_raw <- predict(model_FL_penalized, newdata=data_test, type="raw")
+FL_penalized_pred_prob <- predict(model_FL_penalized, newdata=data_test, type="prob")
+FL_RF_pred_raw <- predict(model_FL_RF, newdata=data_test, type="raw")
+FL_RF_pred_prob <- predict(model_FL_RF, newdata=data_test, type="prob")
+
+par(pty = "s")
+
+# Plot ROC curves for prediction with Fearon and Laitin specification (2003)
+plot.roc(data_test$warstds, FL_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ FL spec (2003)")
+plot.roc(data_test$warstds, add=T, FL_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, FL_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),  
+       cex = .75)
 ```
 
 2) Collier and Hoeffler specification (2004) consisting of 12 variables
@@ -405,10 +440,35 @@ model_AS_penalized_smoted <- train(author_spec,
 model_AS_RF_smoted <- train(author_spec,
                             metric="ROC", method="rf",
                             importance=T, ## Variable importance measures retained
+                            sampsize=c(30,90), # ADDED
+                            proximity=F, ntree=100,  # ADDED
                             trControl=tc, data=data_train_balanced)
 #summary(model_AS_RF_smoted)
 #model_AS_RF_smoted
 #confusionMatrix(model_AS_RF_smoted, norm="average")
+```
+
+# Experimenting with Different Models
+In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. After running some parameter grid searches, we noticed that the Boosted Classification Trees model with the parameters below can achieve an AUC score of 0.922. The simpler Decision Tree model was not able to capture the nature of the dataset that well or achieve such results.
+
+```{r different-models}
+
+# This is the Decision Tree model that we implemented
+model_AS_DT <- train(author_spec,
+                      metric="ROC",
+                      method="rpart",
+                      trControl=tc,
+                      data=data_train)
+
+# This is the Boosted Classifiaction Trees model that we implemented
+model_AS_Boost <- train(author_spec,
+                        metric="ROC",
+                        method="ada",
+                        trControl=tc,
+                        tuneGrid=data.frame(.iter=150, .maxdepth=3, .nu=0.01),
+                        data=data_train)
+
+
 ```
 
 # Variable Importance for Random Forest Models
@@ -507,6 +567,12 @@ AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_
 AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
 AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
 AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
+
+# Testing/prediction for additional Machine Learning models
+AS_DT_pred_raw <- predict(model_AS_DT, newdata=data_test, type="raw")
+AS_DT_pred_prob <- predict(model_AS_DT, newdata=data_test, type="prob")
+AS_Boost_pred_raw <- predict(model_AS_Boost, newdata=data_test, type="raw")
+AS_Boost_pred_prob <- predict(model_AS_Boost, newdata=data_test, type="prob")
 ```
 
 ## Confusion Matrices
@@ -536,6 +602,10 @@ table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=AS_uncorrected_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
+
+# Confusion matrices for prediction with author specification using additional models
+table(pred=AS_DT_pred_raw, obs=data_test$warstds)
+table(pred=AS_Boost_pred_raw, obs=data_test$warstds)
 ```
 
 ## Seperation Plots
