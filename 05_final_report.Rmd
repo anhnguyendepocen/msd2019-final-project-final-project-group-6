@@ -14,6 +14,7 @@ output:
 library(randomForest) # for training RFs with variable importance
 library(rpart) # for training Decision Trees
 library(ada) # for training Boosted Classification Trees
+library(rpart.plot) # for the visualization of the Decision Tree
 library(caret) # for training LR and RF models
 library(ROCR)
 library(pROC) # for plotting ROC curves
@@ -468,6 +469,13 @@ model_AS_Boost <- train(author_spec,
                         tuneGrid=data.frame(.iter=150, .maxdepth=3, .nu=0.01),
                         data=data_train)
 
+
+```
+
+```{r decision-tree-visualization}
+
+# Visualize the Decision Tree to assess which predictors were used and what the cut-offs were
+prp(model_AS_DT$finalModel, box.palette = "Blues", tweak = 1.2)
 
 ```
 
