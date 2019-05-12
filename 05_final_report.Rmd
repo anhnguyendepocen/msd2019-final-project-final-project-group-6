@@ -253,14 +253,14 @@ The ratio of war to peace in our training set is approx. 0.013 and in our test s
 ## SMOTE
 ```{r smote}
 # SMOTE for artificially creating a more balanced training dataset
-data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k = 2)
+data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k = 5)
 table(data_train_balanced$warstds)
 
-# SMOTE with changed 
+# changed parameters 
 data_train_balanced_2 <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100, k=5)
 table(data_train_balanced_2$warstds)
 
-# SMOTE with changed 
+# changed parameters
 data_train_balanced_3 <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k=20)
 table(data_train_balanced_3$warstds)
 
@@ -724,7 +724,7 @@ HS_penalized_pred_prob <- predict(model_HS_penalized, newdata=data_test, type="p
 HS_RF_pred_raw <- predict(model_HS_RF, newdata=data_test, type="raw")
 HS_RF_pred_prob <- predict(model_HS_RF, newdata=data_test, type="prob")
 
-# Testing/predictions for author specification (2016)
+#Testing/predictions for author specification (2016)
 AS_uncorrected_pred_raw <- predict(model_AS_uncorrected, newdata=data_test, type="raw")
 AS_uncorrected_pred_prob <- predict(model_AS_uncorrected, newdata=data_test, type="prob")
 AS_penalized_pred_raw <- predict(model_AS_penalized, newdata=data_test, type="raw")
@@ -732,21 +732,6 @@ AS_penalized_pred_prob <- predict(model_AS_penalized, newdata=data_test, type="p
 AS_RF_pred_raw <- predict(model_AS_RF, newdata=data_test, type="raw")
 AS_RF_pred_prob <- predict(model_AS_RF, newdata=data_test, type="prob")
 
-# Testing/prediction for author specification (2016) trained on SMOTEd dataset
-AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
-AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
-AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
-AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
-AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
-AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
-
-# Testing/prediction for author specification (2016) trained on SMOTEd dataset
-AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
-AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
-AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
-AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
-AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
-AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
 
 # Testing/prediction for additional Machine Learning models
 AS_DT_pred_raw <- predict(model_AS_DT, newdata=data_test, type="raw")
@@ -756,7 +741,7 @@ AS_Boost_pred_prob <- predict(model_AS_Boost, newdata=data_test, type="prob")
 ```
 
 
-```{r temporary addition - vatsala}
+```{r smoted-variation-models-test}
 # Testing/prediction for author specification (2016) trained on SMOTEd dataset
 AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
 AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
@@ -784,40 +769,72 @@ AS_RF_smoted_pred_prob_3 <- predict(model_AS_RF_smoted_3, newdata=data_test, typ
 ```
 
 
-## Confusion Matrices
+## Confusion Matrices and F1 scores
 Let's draw the confusion matrices for each instance we trained in our own implementation.
 ```{r confusion-matrices}
 # Confusion matrices for prediction with Fearon and Laitin specification (2003)
 table(pred=FL_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=FL_penalized_pred_raw, obs=data_test$warstds)
 table(pred=FL_RF_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, FL_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, FL_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, FL_RF_pred_raw, positive = "war")
 
 # Confusion matrices for prediction with Collier and Hoeffler specification (2004)
 table(pred=CH_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=CH_penalized_pred_raw, obs=data_test$warstds)
 table(pred=CH_RF_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, CH_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, CH_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, CH_RF_pred_raw, positive = "war")
 
 # Confusion matrices for prediction with Hegre and Sambanis specification (2006)
 table(pred=HS_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=HS_penalized_pred_raw, obs=data_test$warstds)
 table(pred=HS_RF_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, HS_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, HS_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, HS_RF_pred_raw, positive = "war")
 
 # Confusion matrices for prediction with author specification (2016)
-table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
+#table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
 # table(pred=AS_penalized_pred_raw, obs=data_test$warstds)
 # table(pred=AS_RF_pred_raw, obs=data_test$warstds)
 
+# Confusion matrices for prediction with author specification using additional models
+table(pred=AS_DT_pred_raw, obs=data_test$warstds)
+table(pred=AS_Boost_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, AS_DT_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_Boost_pred_raw, positive = "war")
+```
+
+```{r Smoted-dataset-confusion-matrix-and-f1-scores}
 # Confusion matrices for prediction with author specification (2016) trained on SMOTEd dataset
 table(pred=AS_uncorrected_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
 
-# Confusion matrices for prediction with author specification using additional models
-table(pred=AS_DT_pred_raw, obs=data_test$warstds)
-table(pred=AS_Boost_pred_raw, obs=data_test$warstds)
+table(pred=AS_uncorrected_smoted_pred_raw_2, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw_2, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_2, obs=data_test$warstds)
+
+table(pred=AS_uncorrected_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_3, obs=data_test$warstds)
+
+F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_2, positive = "war")
+F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_3, positive = "war")
+
+F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_2, positive = "war")
+F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_3, positive = "war")
+
+
+F1_Score(data_test$warstds, AS_RF_smoted_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_2, positive = "war")
+F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_3, positive = "war")
 ```
-
-
 
 
 
@@ -1078,40 +1095,11 @@ legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
        text.col=c("blue","red","darkgreen"),
        cex = .75)
 
-# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
-plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob$war, col="blue",
-         xlim=c(1,0), las=1, bty="n", asp=NA,
-         main="Out-of-sample ROC Curves for Models w/ author spec (2016) (SMOTEd)")
-plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob$war, col="red")
-plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob$war, col="darkgreen")
-legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
-                              round(as.numeric(roc(data_test$warstds,
-                                                   AS_uncorrected_smoted_pred_prob$war)$auc),3)),
-                        paste("(2) Penalized LR, AUC:",
-                              round(as.numeric(roc(data_test$warstds,
-                                                   AS_penalized_smoted_pred_prob$war)$auc),3)),
-                        paste("(3) Random Forest, AUC:",
-                              round(as.numeric(roc(data_test$warstds,
-                                                   AS_RF_smoted_pred_prob$war)$auc),3))),
-       text.col=c("blue","red","darkgreen"),
-       cex = .75)
 ```
 
 
 
-```{r temporary addition - vatsala}
-# Confusion matrices for prediction with author specification (2016) trained on SMOTEd dataset
-table(pred=AS_uncorrected_smoted_pred_raw, obs=data_test$warstds)
-table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
-table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
-
-table(pred=AS_uncorrected_smoted_pred_raw_2, obs=data_test$warstds)
-table(pred=AS_penalized_smoted_pred_raw_2, obs=data_test$warstds)
-table(pred=AS_RF_smoted_pred_raw_2, obs=data_test$warstds)
-
-table(pred=AS_uncorrected_smoted_pred_raw_3, obs=data_test$warstds)
-table(pred=AS_penalized_smoted_pred_raw_3, obs=data_test$warstds)
-table(pred=AS_RF_smoted_pred_raw_3, obs=data_test$warstds)
+```{r roc-for-smoted-variations}
 
 
 # Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
@@ -1167,24 +1155,6 @@ legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
                                                    AS_RF_smoted_pred_prob_3$war)$auc),3))),
        text.col=c("blue","red","darkgreen"),
        cex = .75)
-
-
-table(pred=AS_penalized_smoted_pred_raw_3, obs=data_test$warstds)
-table(pred=AS_RF_smoted_pred_raw_3, obs=data_test$warstds)
-
-
-AS_uncorrected_smoted_1_f1 = F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw, positive = "war")
-AS_uncorrected_smoted_2_f1 = F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_2, positive = "war")
-AS_uncorrected_smoted_3_f1 = F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_3, positive = "war")
-
-AS_penalized_smoted_1_f1 = F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw, positive = "war")
-AS_penalized_smoted_2_f1 = F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_2, positive = "war")
-AS_penalized_smoted_3_f1 = F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_3, positive = "war")
-
-
-AS_RF_smoted_1_f1 = F1_Score(data_test$warstds, AS_RF_smoted_pred_raw, positive = "war")
-AS_RF_smoted_2_f1 = F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_2, positive = "war")
-AS_RF_smoted_3_f1 = F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_3, positive = "war")
 
 
 ```
