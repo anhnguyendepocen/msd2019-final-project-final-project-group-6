@@ -41,10 +41,10 @@ Prediction is at the heart of many machine learning and data science application
 ## Paper Description
 Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al. is an explaratory research paper that, among several other things, makes the argument that most well-known logistic models acquire relatively lower predictive powers for civil war onsets, and shows that a custom random forest model achieves much higer prediction accuracies.
 
-## Replication Description
+## Replication & Implementation Description
 The replication for the paper mentioned will consist of two main parts, which will go parallel to each other as represented in this R Notebook. The first part will deal with extracting code snippets from the original R code (found in ```original_code/```), and questioning the reasonability and correctness of the methods and code semantics used, as well as an effort to see if results can be completely replicated. The second part will deal with suggesting improvements, modifications, and eventually corrections to the original R code, where we will try to report summaries of each model using fair metrics and correct methodologies. Comments included with double hashcodes (```##```) corresponds to comments made by authors themselves.
 
-Later, a third part will deal with suggesting new models like neural networks and custom decision trees.
+Later, a third part will deal with suggesting new models like neural networks, custom decision trees, and boosting algorithms.
 
 # Data Exploration
 
@@ -92,6 +92,17 @@ Y_factor <- function(dataset_column) {
   return(factor(dataset_column, levels=c(0,1), labels=c("peace", "war")))
 }
 
+# Function for getting dataset for correspondence between cid (Country ID) and country from original HS (2006) dataset
+# This is needed because some other datasets only include cid
+country_correspondence <- data_HS_original[,c("cid", "country")]
+get_countries <- function(country_ids) {
+  countries <- c()
+  for(id in country_ids) {
+    countries <- c(countries, country_correspondence[country_correspondence$cid==id, ]$country[1])
+  }
+  return(countries)
+}
+
 # Convert 'warstds' column into 'peace' or 'war' (initially marked 0 or 1)
 data_HS_original$warstds <- Y_factor(data_HS_original$warstds)
 data_HS_imputed$warstds <- Y_factor(data_HS_imputed$warstds)
@@ -100,13 +111,17 @@ data_AF_imputed$warstds <- Y_factor(data_AF_imputed$warstds)
 
 # Visualize countries with civil war for each dataset
 data(wrld_simpl)
-HS_original_countries <- wrld_simpl@data$NAME %in%    
- data_HS_original[data_HS_original$warstds=='war',]$country   
+HS_original_countries <- wrld_simpl@data$NAME %in%
+  data_HS_original[data_HS_original$warstds=='war',]$country 
+HS_imputed_countries <- wrld_simpl@data$NAME %in%    
+  get_countries(data_HS_imputed[data_HS_imputed$warstds=='war',]$cid)
 AM_imputed_countries <- wrld_simpl@data$NAME %in% 
   data_AM_imputed[data_AM_imputed$warstds=='war',]$country
 
 plot(wrld_simpl, col=c(gray(.80),"red")[HS_original_countries+1],    
-    main='Original Hegre and Sambanis (2006)')    
+    main='Original Hegre and Sambanis (2006)')
+plot(wrld_simpl, col=c(gray(.80),"red")[HS_imputed_countries+1],    
+    main='Imputed Hegre and Sambanis')
 plot(wrld_simpl, col=c(gray(.80),"red")[AM_imputed_countries+1],
      main='Imputed Amelia Dataset')
 ```
@@ -120,11 +135,13 @@ There are a few questions left unanswered after replicating the data importing a
 * The second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values. 
 * Lastly, the third dataset imputed by authors, denoted ```AF_imputed```, has 737 examples, 11 features, and 0 cells containing missing (NA) values. This dataset is also **dropped**, because 
     i) no country information exists whatsoever, and more importantly 
-    ii) none of the features (columns) in this dataset match with any of the other features in the         other datasets (except the dependent variable). 
+    ii) none of the features (columns) in this dataset match with any of the other features in the other datasets (except the dependent variable). 
 
 It is also unclear why the paper needs three different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. 
 
-For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. Moreover, the authors have only used an in-sample accuracy metric to report the performance of their models which couldn't be inferred from the paper. Hence, the reported performance measures on the paper don't really give us much insight into how these models might behave with unseen data. In order to assess performance, we have to test our models for **out-of-sample data**. Before generating this out-of-sample data, let's try to understand the difference between the datasets used by authors through an exploration of the respective numbers of binary classes in each dataset.
+For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. Other datasets and the ```HS_imputed``` dataset without the split will also be utilized in parts where we try to replicate results from the paper. Although we don't think in-sample measures are the correct way to assess the performance of any model, we will do so to see if we can **completely** replicate graphs and reported measures in the original paper.
+
+Before generating the out-of-sample data through a train/test split, let's try to understand the difference between the datasets used by authors through an exploration of the respective numbers of binary classes in each dataset.
 
 ## Exploration of Class Imbalance in Datasets
 ```{r class-imbalance-exploration}
@@ -201,9 +218,7 @@ HS_spec <- get_model_formula(y_var, HS_vars)
 ```
 
 # Data Processing
-Based on our exploration, we will **drop** every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the missing values and variables in other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years *1945-1990* will construct the training set, whereas examples after *1990* will construct the testing set.
-
-NOTE: Other datasets and the ```HS_imputed``` dataset without the split mentioned above will also be utilized in parts where we try to replicate results from the paper. As mentioned, although we don't think in-sample measures are the correct way to assess the performance of any model, we will do so to see if we can **completely** replicate graphs and repoted measures in the original paper.
+Based on our exploration, we will **drop** every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. The original R code also **mostly** uses this same dataset for training and testing models. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the missing values and variables in other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years *1945-1990* will construct the training set, whereas examples after *1990* will construct the testing set.
 
 ## Removing Unused Columns
 ```{r data-processing}
@@ -241,7 +256,7 @@ table(data_train_balanced$warstds)
 # Model Training
 
 ## Training Setup
-Below is the setup to be run before training. We are not changing much from the original R code here. One thing to look for is that, we will set the seed for each caret training function call in order to present results that are replicable. The original code by the authors only set the seed once, which in turn makes some their results unreplicable.
+Below is the setup to be run before training. One thing to look for is that, we will set the seed for each caret training function call in order to present results that are replicable. The original code by the authors only set the seed once, which in turn makes some their results unreplicable. Moreover, the ```tc_original``` and ```tc``` training controls showcase the difference in indexing between author's approach and our approach. Setting the index argument makes our models replicable, whereas the lack of it causes author's models to be unreplicable.
 
 ```{r setup-before-training}
 set.seed(666) ## the most metal seed for CV
@@ -267,7 +282,7 @@ tc <- trainControl(method="cv",
                    classProb=T)
 ```
 
-## Replicating Author's Models
+## Replicating Author's Training Processes
 ```{r training-replication}
 # Fearon and Laitin LR Model (2003) Uncorrected
 REP_model_FL_uncorrected <- train(FL_spec,
@@ -331,18 +346,20 @@ REP_model_AS_RF <- train(author_spec,
 ```
 
 ## Training Insights
-A major problem we noticed with the original implementation was that the initially commented out random forest training process included an option for down-sampling, whereas the other logistic regression training processes didn't have this option specified. As they weren't presented on the paper, we chose to not include those random forest models (except for author specification 88 variables) in our replication above.
+A major problem we noticed with the original implementation was that the initially commented out random forest training process included an option for down-sampling, whereas the other logistic regression training processes didn't have this option specified. As they weren't presented on the paper, we chose to not include those random forest models (except for author specification 88 variables) in our replication above. This has the potential to yield unfair comparisons, so we decided to remove down-sampling option in our own implementations. 
 
-This has the potential to yield unfair comparisons, so we decided to remove down-sampling option. For dealing with class-imbalance, we will train models with our SMOTEd dataset later and test them on unseen, original (not artifically generated by SMOTE) data.
+Perhaps the biggest problem is that the authors have only used an in-sample accuracy metric to report the performance of their models which couldn't be directly inferred from the paper otherwise. Hence, the reported performance measures on the paper don't really give us much insight into how these models might behave with unseen data. In order to assess performance, we have to test our models for **out-of-sample data** ```data_test``` while training our models on the seperated ```data_train```. 
 
-We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train a fifth instance with author specification (88 variables), but instead on the ```data_train_balanced``` dataset this time. For each of the 5 instances of training, we will include 
+The already mentioned problem with index argument of the training controls and uncorrect seed setting unfortunately makes the results of the paper completely unreplicable. One can uncomment the 3 lines of summary reporting below each model in the above code block to observe how ROC values changes (although in miniscule amounts) with every training instance. This could be confirmed by running the same corresponding lines from author's original code included in ```data/Comparing+Random+Forest+with+Logistic+Regression+R+Code.R``` and observing how ROC values changes (although in miniscule amounts) again. It seems that the author's were unaware of the unreplicability of their results as they included hardcoded values for their AUC measures. In contrast, uncommenting the 3 lines of summary reporting below each model in the below code block should showcase how ROC values are preserved and hence prove the replicability of our implementation.
+
+We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train a fifth instance with author specification (88 variables), but instead on the ```data_train_balanced``` dataset this time. As previously mentioned, this dataset was created with the SMOTE algorithm to deal with the class-imbalance in the dataset. For each of the 5 instances of training, we will include 
   i) a logistic regression model (LR) with uncorrected logits, 
   ii) a logistic regression model (LR) with penalized logits using Firth's method, and 
   iii) a random forest model (RF). 
 
-All of the models use the cross-validation training control, ```tc```, implemented in the above code block.
+All of the models use the corrected version of the cross-validation training control, ```tc```, implemented in the above code block.
 
-## Training Processes
+## Our Own Training Processes
 1) Fearon and Laitin specification (2003) consisting of 11 variables
 ```{r LR-vs-RF-on-FL-specification}
 set.seed(666) ## the most metal seed for CV
@@ -494,11 +511,10 @@ model_AS_RF_smoted <- train(author_spec,
 #confusionMatrix(model_AS_RF_smoted, norm="average")
 ```
 
-# Experimenting with Different Models
+## Experimenting with Different Models
 In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. After running some parameter grid searches, we noticed that the Boosted Classification Trees model with the parameters below can achieve an AUC score of 0.922. The simpler Decision Tree model was not able to capture the nature of the dataset that well or achieve such results.
 
 ```{r different-models}
-
 # This is the Decision Tree model that we implemented
 model_AS_DT <- train(author_spec,
                       metric="ROC",
@@ -513,8 +529,6 @@ model_AS_Boost <- train(author_spec,
                         trControl=tc,
                         tuneGrid=data.frame(.iter=150, .maxdepth=3, .nu=0.01),
                         data=data_train)
-
-
 ```
 
 ```{r decision-tree-visualization}
@@ -555,6 +569,8 @@ varImpPlot(REP_model_AM_imputed, sort=T, type=2,
 #importance(REP_model_AM_imputed) # commented-out because prints a long list
 ```
 
+One can check the full descriptions of the variables printed above on the y-axis of the Variable Importance table from the included ```data/Sambanis Appendix (Aug 06).pdf``` PDF file. When compared to the results from the paper, we see that roughly the same variables are included in the plot as the 20 most important variables. However, it could be easily observed that the order of these variables are different than those reported in the original paper. This is parallel to unreplicability issue mentioned previously. 
+
 ## Retraining Random Forest Models
 Firstly, we will retrain random forest models with the same specs and data mentioned above, but with ```randomForests()``` class this same in order to plot importance of variables. Note that these models will only be used to visualize variable importance, and will be dropped later in order to not cause any confusion.
 
@@ -572,7 +588,7 @@ AS_RF_smoted <- randomForest(author_spec, importance=T, proximity=F, ntree=num_t
                              confusion=T, err.rate=T, data=data_train_balanced)
 ```
 
-## Visualizing Variable Importances
+## Our Own Variable Importance Visualizations
 Now, we can visualize the variable importances for each of the random forest models trained above.
 ```{r variable-importance-based-on-RF-models}
 # Specify maximum number of variables (features) to be displayed
@@ -605,7 +621,7 @@ For each of the 3 models used for each of the 5 specifications and, we will use 
   ii) type="prob" for class probabilities to be used with ROC curves and computation of AUC metric.
 
 ## Replicating Author's Prediction Processes
-Again, note that the author's replicated models are trained on the entire ```HS_imputed``` dataset, and predicted/tested on the entire dataset as shown below.
+We have previously discussed that the author's replicated models are trained on the entire ```HS_imputed``` dataset, predicted/tested on the same, entire dataset as well, and how this hurst the reliability of the performance measures reported in the original paper. Below is the corresponding replication.
 
 ```{r testing-replication}
 # Testing/predictions for Fearon and Laitin specification (2003)
@@ -631,7 +647,7 @@ REP_AS_RF_pred_raw <- predict(REP_model_AS_RF, newdata=data, type="raw")
 REP_AS_RF_pred_prob <- predict(REP_model_AS_RF, newdata=data, type="prob")
 ```
 
-## Prediction Processes
+## Our Own Prediction Processes
 ```{r testing-trained-models-on-out-of-sample-data}
 # Testing/predictions for Fearon and Laitin specification (2003)
 FL_uncorrected_pred_raw <- predict(model_FL_uncorrected, newdata=data_test, type="raw")
@@ -681,7 +697,7 @@ AS_Boost_pred_prob <- predict(model_AS_Boost, newdata=data_test, type="prob")
 ```
 
 ## Confusion Matrices
-Let's draw the confusion matrices for each instance.
+Let's draw the confusion matrices for each instance we trained in our own implementation.
 ```{r confusion-matrices}
 # Confusion matrices for prediction with Fearon and Laitin specification (2003)
 table(pred=FL_uncorrected_pred_raw, obs=data_test$warstds)
@@ -743,8 +759,9 @@ separationplot(REP_AS_RF_pred_prob$war,
                heading="REP: Author Spec (2016) Random Forests Seperation Plot",
                height=1.5, col0="white", col1="black", newplot=F)
 ```
+Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the tree logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
 
-## Seperation Plots
+## Our Own Seperation Plots
 Let's draw the seperation plots for each instance.
 ```{r seperation-plots}
 # Seperation plots for prediction with Fearon and Laitin specification (2003)
@@ -882,6 +899,7 @@ legend("bottomright", c(paste("(1) REP: FL (2003) Penalized LR, AUC:",
        cex = .75)
 
 ```
+The unreplicability of the results are justified most with the reported ROC curves and accompanying AUC curves as shown above. It should be remembered that the curves and measures presented above are NOT tested with **out-of-sample** data, rather they simply act as a training summary. This explains the high AUC score of the random forest model.
 
 ## ROC Curves with AUC Scores
 Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: 
