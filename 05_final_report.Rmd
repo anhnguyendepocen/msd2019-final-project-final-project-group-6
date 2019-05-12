@@ -30,7 +30,7 @@ theme_set(theme_bw())
 
 knitr::opts_chunk$set(echo = TRUE)
 
-registerDoMC(cores=7) ## distributing workload over multiple cores for faster computaiton
+registerDoMC(cores=7) ## distributing workload over multiple cores for faster computation
 ```
 
 # Introduction
@@ -248,9 +248,18 @@ set.seed(666) ## the most metal seed for CV
 
 # Specify number of folds (10 by default, suggested by authors)
 num_folds <- 10
-# This line is different than original, but proven to not change anything numerically
+
+# Indexing that will be used with our models -> aimed to control randomness so all models are replicable
 cv_index <- createFolds(factor(data_train$warstds), num_folds, returnTrain=T)
-## This method of data slicing - or CV - will be used for all logit models
+
+# This is the original training control included in author's code that unfortunately makes models NOT replicable 
+# This will only be used with author's models (notice that the index argument is NOT set)
+tc_original <- trainControl(method="cv", 
+                            number=num_folds, ## creates CV folds - 10 for this data
+                            summaryFunction=twoClassSummary, ## provides ROC stats in call to model
+                            classProb=T)
+
+# This is the corrected training control with indexing for replicability
 tc <- trainControl(method="cv", 
                    index=cv_index,
                    number=num_folds, ## creates CV folds - 10 for this data
@@ -263,7 +272,7 @@ tc <- trainControl(method="cv",
 # Fearon and Laitin LR Model (2003) Uncorrected
 REP_model_FL_uncorrected <- train(FL_spec,
                                   metric="ROC", method="glm", family="binomial",
-                                  trControl=tc, data=data)
+                                  trControl=tc_original, data=data)
 #summary(REP_model_FL_uncorrected) ## provides coefficients & traditional R model output
 #REP_model_FL_uncorrected ## provides CV summary stats
 #confusionMatrix(REP_model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
@@ -271,7 +280,7 @@ REP_model_FL_uncorrected <- train(FL_spec,
 # Fearon and Laitin LR Model (2003) Penalized
 REP_model_FL_penalized <- train(FL_spec,
                                 metric="ROC", method="plr", # Firth's penalized LR
-                                trControl=tc, data=data)
+                                trControl=tc_original, data=data)
 #summary(REP_model_FL_penalized)
 #REP_model_FL_penalized
 #confusionMatrix(REP_model_FL_penalized, norm="average")
@@ -279,7 +288,7 @@ REP_model_FL_penalized <- train(FL_spec,
 # Collier and Hoeffler LR Model (2004) Uncorrected
 REP_model_CH_uncorrected <- train(CH_spec,
                                   metric="ROC", method="glm", family="binomial", 
-                                  trControl=tc, data=data)
+                                  trControl=tc_original, data=data)
 #summary(REP_model_CH_uncorrected) ## provides coefficients & traditional R model output
 #REP_model_CH_uncorrected ## provides CV summary stats
 #confusionMatrix(REP_model_CH_uncorrected, norm="average") ## confusion matrix for predicted classes
@@ -287,7 +296,7 @@ REP_model_CH_uncorrected <- train(CH_spec,
 # Collier and Hoeffler LR Model (2004) Penalized
 REP_model_CH_penalized <- train(CH_spec,
                                 metric="ROC", method="plr", # Firth's penalized LR
-                                trControl=tc, data=data)
+                                trControl=tc_original, data=data)
 #summary(REP_model_CH_penalized)
 #REP_model_CH_penalized
 #confusionMatrix(REP_model_CH_penalized, norm="average")
@@ -295,7 +304,7 @@ REP_model_CH_penalized <- train(CH_spec,
 # Hegre and Sambanis LR Model (2006) Uncorrected
 REP_model_HS_uncorrected <- train(HS_spec,
                                   metric="ROC", method="glm", family="binomial", 
-                                  trControl=tc, data=data)
+                                  trControl=tc_original, data=data)
 
 #summary(REP_model_HS_uncorrected) ## provides coefficients & traditional R model output
 #REP_model_HS_uncorrected ## provides CV summary stats
@@ -304,18 +313,18 @@ REP_model_HS_uncorrected <- train(HS_spec,
 # Hegre and Sambanis LR Model (2006) Penalized
 REP_model_HS_penalized <- train(HS_spec,
                                 metric="ROC", method="plr", # Firth's penalized LR
-                                trControl=tc, data=data)
+                                trControl=tc_original, data=data)
 #summary(REP_model_HS_penalized)
 #REP_model_HS_penalized
 #confusionMatrix(REP_model_HS_penalized, norm="average")
 
 # Random Forest Model on author specification (2016)
 REP_model_AS_RF <- train(author_spec,
-                     metric="ROC", method="rf",
-                     sampsize=c(30,90), ## Downsampling the class-imbalanced DV
-                     importance=T, ## Variable importance measures retained
-                     proximity=F, ntree=3000, ## number of trees grown
-                     trControl=tc, data=data)
+                         metric="ROC", method="rf",
+                         sampsize=c(30,90), ## Downsampling the class-imbalanced DV
+                         importance=T, ## Variable importance measures retained
+                         proximity=F, ntree=1000, ## number of trees grown
+                         trControl=tc_original, data=data)
 #summary(REP_model_AS_RF)
 #REP_model_AS_RF
 #confusionMatrix(REP_model_AS_RF, norm="average")
@@ -518,8 +527,8 @@ prp(model_AS_DT$finalModel, box.palette = "Blues", tweak = 1.2)
 # Variable Importance for Random Forest Models
 One advantage of the Random Forests algorithm is that it is easy to interpret, robust to outliers and noise, and allows the analyst to infer causal mechanisms. Although the paper has serious methodological flaws, we think that its suggestion of Random Forests is well-grounded. The original R code by authors visualizes the variable importance for a Random Forest Model trained on the ```data_AM_imputed``` dataset, however we **dropped** that dataset as discussed before. It makes the most sense to us to visualize the variable importance on the 5 different random forest models we trained in the previous segment, 4 on ```data_train``` and 1 on ```data_train_balanced``` to be exact. By doing this, we can achieve: 
   i) See if theories suggested by different parties on theoretical variables deciding a civil war onset   agree with our findings or not, 
-  ii) Observe if any variables are deemed to be `unimportant` by the random forest algorithm, measured   by mean decrease in Gini classification measure in the case that they are not considered in training,
-  iii) Observe the difference of variable importance on random forests models trained on original        training set and artifically created training set, and essentially see how the SMOTE algorithms        affects this measure.
+  ii) Observe if any variables are deemed to be `unimportant` by the random forest algorithm, measured by mean decrease in Gini classification measure in the case that they are not considered in training,
+  iii) Observe the difference of variable importance on random forests models trained on original training set and artifically created training set, and essentially see how the SMOTE algorithms affects this measure.
   
 ## Replicating Author's Variable Importance Visualizations
 Before diving into our own versions, let's see if we get the same results with the paper on variable importance of a random forest model trained on ```data_AM_imputed```.
