@@ -1,7 +1,7 @@
 ---
 title: "MSD 2019 Final Project"
 subtitle: "A replication and extension of Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al., October 22, 2015"
-author: "Your Names (your unis)"
+author: "Deniz Ulcay, Vatsala Swaroop, Ongun Uzay Macar (du2147, vs2671, oum2000)"
 date: '`r Sys.time()`'
 output:
   pdf_document:
