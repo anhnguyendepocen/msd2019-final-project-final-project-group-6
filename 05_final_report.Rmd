@@ -1296,7 +1296,15 @@ iii) Since we are working with an imbalanced dataset, we have used SMOTE to gene
 iv) We have also trained and checked the performance of new models -  decision trees, boosting, neural networks
 
 #Comparing our models / findings
-add detailed results and comparisons
+add detailed results and comparisons for F1 score and AUC
+
+notes about smote - We tried variations for different nearest neighbours, upsampling and downsampling. While our ROC score is comparable, F1 score is quite poor. Since test set is still skewed and training set reasonably balanced, our model estimates far more cases of False positives on the test. Hence, the precision is low and that leads to low F1 score.We believe that ROC is a much more important metric in this case.
+
+We also noticed that while the ROC score for different settings in smote was somewhat similar, the confusion matrix generated varied considerably in terms if the number of false positives. For eg. with 20 nearest neighbours far more false positives were generated than with 5 nearest neighbours. 
+
+We have commented out/not included the code for these multiple variations to avoid unnecessary clutter.
+
+
 
 #Final comments on the original paper
 
