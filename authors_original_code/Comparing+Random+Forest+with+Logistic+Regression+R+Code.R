@@ -1,8 +1,10 @@
-setwd("Documents/Projects/Methods Research/Political Analysis Submission/Final Final PA Submission Materials") 
+### MODIFY BELOW LINES TO ACCESS DATA CORRECTLY IN REPOSITORY ###
+setwd("~/Desktop/msd2019-final-project-final-project-group-6") 
 getwd()
-data=read.csv(file="SambnisImp.csv") # data for prediction
-data2<-read.csv(file="Amelia.Imp3.csv") # data for causal machanisms
+data=read.csv(file="data/SambnisImp.csv") # data for prediction
+data2<-read.csv(file="data/Amelia.Imp3.csv") # data for causal machanisms
 
+### ORIGINAL AUTHOR'S CODE FROM NOW ON BELOW (UNTOUCHED) ###
 library(randomForest) #for random forests
 library(caret) # for CV folds and data splitting
 library(ROCR) # for diagnostics and ROC plots/stats
@@ -35,8 +37,6 @@ data.full$warstds<-factor(
 registerDoMC(cores=7) # distributing workload over multiple cores for faster computaiton
 
 set.seed(666) #the most metal seed for CV
-
-
                         
 
 #This method of data slicing - or CV - will be used for all logit models - uncorrected and corrected

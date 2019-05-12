@@ -1,7 +1,7 @@
 ---
 title: "MSD 2019 Final Project"
 subtitle: "A replication and extension of Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al., October 22, 2015"
-author: "Your Names (your unis)"
+author: "Deniz Ulcay, Vatsala Swaroop, Ongun Uzay Macar (du2147, vs2671, oum2000)"
 date: '`r Sys.time()`'
 output:
   pdf_document:
@@ -19,18 +19,19 @@ library(caret) # for training LR and RF models
 library(ROCR)
 library(pROC) # for plotting ROC curves
 library(stepPlr)
-library(doMC) # for distributed workload
+#library(doMC) # for distributed workload
 library(tidyverse)
 library(foreign) # for reading Stata .dta files
 library(maptools) # for displaying countries on world map
 library(DMwR) # for up-sampling with SMOTE
 library(separationplot) # for displaying seperation plots
+library(MLmetrics)
 
 theme_set(theme_bw())
 
 knitr::opts_chunk$set(echo = TRUE)
 
-registerDoMC(cores=7) ## distributing workload over multiple cores for faster computaiton
+#registerDoMC(cores=7) ## distributing workload over multiple cores for faster computation
 ```
 
 # Introduction
@@ -41,10 +42,10 @@ Prediction is at the heart of many machine learning and data science application
 ## Paper Description
 Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data by David Muchlinski, David Siroky, et. al. is an explaratory research paper that, among several other things, makes the argument that most well-known logistic models acquire relatively lower predictive powers for civil war onsets, and shows that a custom random forest model achieves much higer prediction accuracies.
 
-## Replication Description
+## Replication & Implementation Description
 The replication for the paper mentioned will consist of two main parts, which will go parallel to each other as represented in this R Notebook. The first part will deal with extracting code snippets from the original R code (found in ```original_code/```), and questioning the reasonability and correctness of the methods and code semantics used, as well as an effort to see if results can be completely replicated. The second part will deal with suggesting improvements, modifications, and eventually corrections to the original R code, where we will try to report summaries of each model using fair metrics and correct methodologies. Comments included with double hashcodes (```##```) corresponds to comments made by authors themselves.
 
-Later, a third part will deal with suggesting new models like neural networks and custom decision trees.
+Later, a third part will deal with suggesting new models like neural networks, custom decision trees, and boosting algorithms.
 
 # Data Exploration
 
@@ -92,6 +93,17 @@ Y_factor <- function(dataset_column) {
   return(factor(dataset_column, levels=c(0,1), labels=c("peace", "war")))
 }
 
+# Function for getting dataset for correspondence between cid (Country ID) and country from original HS (2006) dataset
+# This is needed because some other datasets only include cid
+country_correspondence <- data_HS_original[,c("cid", "country")]
+get_countries <- function(country_ids) {
+  countries <- c()
+  for(id in country_ids) {
+    countries <- c(countries, country_correspondence[country_correspondence$cid==id, ]$country[1])
+  }
+  return(countries)
+}
+
 # Convert 'warstds' column into 'peace' or 'war' (initially marked 0 or 1)
 data_HS_original$warstds <- Y_factor(data_HS_original$warstds)
 data_HS_imputed$warstds <- Y_factor(data_HS_imputed$warstds)
@@ -100,13 +112,17 @@ data_AF_imputed$warstds <- Y_factor(data_AF_imputed$warstds)
 
 # Visualize countries with civil war for each dataset
 data(wrld_simpl)
-HS_original_countries <- wrld_simpl@data$NAME %in%    
- data_HS_original[data_HS_original$warstds=='war',]$country   
+HS_original_countries <- wrld_simpl@data$NAME %in%
+  data_HS_original[data_HS_original$warstds=='war',]$country 
+HS_imputed_countries <- wrld_simpl@data$NAME %in%    
+  get_countries(data_HS_imputed[data_HS_imputed$warstds=='war',]$cid)
 AM_imputed_countries <- wrld_simpl@data$NAME %in% 
   data_AM_imputed[data_AM_imputed$warstds=='war',]$country
 
 plot(wrld_simpl, col=c(gray(.80),"red")[HS_original_countries+1],    
-    main='Original Hegre and Sambanis (2006)')    
+    main='Original Hegre and Sambanis (2006)')
+plot(wrld_simpl, col=c(gray(.80),"red")[HS_imputed_countries+1],    
+    main='Imputed Hegre and Sambanis')
 plot(wrld_simpl, col=c(gray(.80),"red")[AM_imputed_countries+1],
      main='Imputed Amelia Dataset')
 ```
@@ -120,11 +136,13 @@ There are a few questions left unanswered after replicating the data importing a
 * The second dataset imputed by authors, denoted ```AM_imputed```, has 7141 examples, 53 features, and 778 cells containing missing (NA) values. 
 * Lastly, the third dataset imputed by authors, denoted ```AF_imputed```, has 737 examples, 11 features, and 0 cells containing missing (NA) values. This dataset is also **dropped**, because 
     i) no country information exists whatsoever, and more importantly 
-    ii) none of the features (columns) in this dataset match with any of the other features in the         other datasets (except the dependent variable). 
+    ii) none of the features (columns) in this dataset match with any of the other features in the other datasets (except the dependent variable). 
 
 It is also unclear why the paper needs three different imputed datasets. The ```AM_imputed``` dataset is supposed to be the smaller dataset where features theorized to be most relevant to the onset of civil war are imputed. Although the number of features decrease as claimed, 778 cells with missing (NA) values reappear in this dataset, and the number of examples increase by 1 without any explanation. 
 
-For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. Moreover, the authors have only used an in-sample accuracy metric to report the performance of their models which couldn't be inferred from the paper. Hence, the reported performance measures on the paper don't really give us much insight into how these models might behave with unseen data. In order to assess performance, we have to test our models for **out-of-sample data**. Before generating this out-of-sample data, let's try to understand the difference between the datasets used by authors through an exploration of the respective numbers of binary classes in each dataset.
+For comparison and metrics reporting purposes anyway, it is usually a better idea to select a singular dataset and train & test models on this same dataset through a reasonable splitting of data. Other datasets and the ```HS_imputed``` dataset without the split will also be utilized in parts where we try to replicate results from the paper. Although we don't think in-sample measures are the correct way to assess the performance of any model, we will do so to see if we can **completely** replicate graphs and reported measures in the original paper.
+
+Before generating the out-of-sample data through a train/test split, let's try to understand the difference between the datasets used by authors through an exploration of the respective numbers of binary classes in each dataset.
 
 ## Exploration of Class Imbalance in Datasets
 ```{r class-imbalance-exploration}
@@ -136,11 +154,11 @@ table(data_AF_imputed$warstds)
 ```
 
 It can be inferred that authors have either deleted or modified examples from the ```HS_original``` dataset where the ```warstds``` variable was NA when they were preparing their imputed dataset ```HS_imputed```. Hence, they increased examples of peace by 800 examples in their imputation. In such a class-imbalanced data (as displayed by tables above), one would imagine 
-  i) down-sampling from the majority class or 
-  ii) up-sampling from the minority class would be the reasonable action, 
-rather than increasing the number of examples of the majority class. We will implement these two techniques, i) and ii), and see if they yield better results.
-
-SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation) It is a combination of i) and ii).
+    i) down-sampling from the majority class or 
+    ii) up-sampling from the minority class would be the reasonable action, 
+    rather than increasing the number of examples of the majority class. 
+  
+We will implement these two techniques, i) and ii), through a method called SMOTE and see if they yield better results. SMOTE (Synthetic Minority Over-sampling Technique) is designed for problems when one class dominates the other, which usually happens in rare-event occurrences. We can easily make the argument that it is thus appropraite for the civil war onset data at hand. The general idea of this method is to artificially generate new examples of the minority class using the nearest neighbors of these cases. Furthermore, the majority class examples are also under-sampled, leading to a more balanced dataset. (RDocumentation)
 
 # Model Specifications
 To keep track of model specifications which use different numbers and types of features based on either theory or computations, we propose that we explicitly define features and hence accompanying formulas to be used by models later in this next code block. The 4 specifications the paper have covered are:
@@ -201,7 +219,7 @@ HS_spec <- get_model_formula(y_var, HS_vars)
 ```
 
 # Data Processing
-Based on our exploration, we will **drop** every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the missing values and variables in other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years *1945-1990* will construct the training set, whereas examples after *1990* will construct the testing set.
+Based on our exploration, we will **drop** every dataset discussed up until now except ```HS_imputed```, and do a split on this dataset. The original R code also **mostly** uses this same dataset for training and testing models. This is to prevent any ambiguity, and also to respect the research done by Muchlinski et. al. (2016). Although it is unmentioned how they removed examples and filled missing values, this dataset seems the most workable with when the missing values and variables in other datasets are considered. The specific splitting strategy is the one that was mentioned but not implemented by the authors: Examples spanning years *1945-1990* will construct the training set, whereas examples after *1990* will construct the testing set.
 
 ## Removing Unused Columns
 ```{r data-processing}
@@ -209,7 +227,7 @@ Based on our exploration, we will **drop** every dataset discussed up until now 
 extra_vars <- c(y_var, "year", "cid")
 all_vars <- unique(c(author_vars, FL_vars, CH_vars, HS_vars, extra_vars))
 # Remove unwanted columns and specify chosen dataset
-data <- data_HS_imputed[,all_vars]
+data <- data_HS_imputed[,all_vars] # KEEP: corresponds to data.full in original author's code
 ncol(data) # debugging
 ```
 
@@ -229,25 +247,47 @@ data_train$warstds <- as.factor(data_train$warstds)
 data_test$warstds <- as.factor(data_test$warstds)
 ```
 
+The ratio of war to peace in our training set is approx. 0.013 and in our test set is 0.017. Since these two ratios are comparable, the training and test set generated by our split year share similar characteristics. Hence, we stick to this train-test split suggested.
+
+
 ## SMOTE
 ```{r smote}
 # SMOTE for artificially creating a more balanced training dataset
-data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100)
+data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k = 5)
 table(data_train_balanced$warstds)
+
+# changed parameters 
+data_train_balanced_2 <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100, k=5)
+table(data_train_balanced_2$warstds)
+
+# changed parameters
+data_train_balanced_3 <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k=20)
+table(data_train_balanced_3$warstds)
+
 ```
 
 # Model Training
 
 ## Training Setup
-Below is the setup to be run before training. We are not changing much from the original R code here. One thing to look for is that, we will set the seed for each caret training function call in order to present results that are replicable. The original code by the authors only set the seed once, which in turn makes some their results unreplicable.
+Below is the setup to be run before training. One thing to look for is that, we will set the seed for each caret training function call in order to present results that are replicable. The original code by the authors only set the seed once, which in turn makes some their results unreplicable. Moreover, the ```tc_original``` and ```tc``` training controls showcase the difference in indexing between author's approach and our approach. Setting the index argument makes our models replicable, whereas the lack of it causes author's models to be unreplicable.
 
 ```{r setup-before-training}
 set.seed(666) ## the most metal seed for CV
 
 # Specify number of folds (10 by default, suggested by authors)
 num_folds <- 10
+
+# Indexing that will be used with our models -> aimed to control randomness so all models are replicable
 cv_index <- createFolds(factor(data_train$warstds), num_folds, returnTrain=T)
-## This method of data slicing - or CV - will be used for all logit models
+
+# This is the original training control included in author's code that unfortunately makes models NOT replicable 
+# This will only be used with author's models (notice that the index argument is NOT set)
+tc_original <- trainControl(method="cv", 
+                            number=num_folds, ## creates CV folds - 10 for this data
+                            summaryFunction=twoClassSummary, ## provides ROC stats in call to model
+                            classProb=T)
+
+# This is the corrected training control with indexing for replicability
 tc <- trainControl(method="cv", 
                    index=cv_index,
                    number=num_folds, ## creates CV folds - 10 for this data
@@ -255,14 +295,84 @@ tc <- trainControl(method="cv",
                    classProb=T)
 ```
 
+## Replicating Author's Training Processes
+```{r training-replication}
+# Fearon and Laitin LR Model (2003) Uncorrected
+REP_model_FL_uncorrected <- train(FL_spec,
+                                  metric="ROC", method="glm", family="binomial",
+                                  trControl=tc_original, data=data)
+#summary(REP_model_FL_uncorrected) ## provides coefficients & traditional R model output
+#REP_model_FL_uncorrected ## provides CV summary stats
+#confusionMatrix(REP_model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Fearon and Laitin LR Model (2003) Penalized
+REP_model_FL_penalized <- train(FL_spec,
+                                metric="ROC", method="plr", # Firth's penalized LR
+                                trControl=tc_original, data=data)
+#summary(REP_model_FL_penalized)
+#REP_model_FL_penalized
+#confusionMatrix(REP_model_FL_penalized, norm="average")
+
+# Collier and Hoeffler LR Model (2004) Uncorrected
+REP_model_CH_uncorrected <- train(CH_spec,
+                                  metric="ROC", method="glm", family="binomial", 
+                                  trControl=tc_original, data=data)
+#summary(REP_model_CH_uncorrected) ## provides coefficients & traditional R model output
+#REP_model_CH_uncorrected ## provides CV summary stats
+#confusionMatrix(REP_model_CH_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Collier and Hoeffler LR Model (2004) Penalized
+REP_model_CH_penalized <- train(CH_spec,
+                                metric="ROC", method="plr", # Firth's penalized LR
+                                trControl=tc_original, data=data)
+#summary(REP_model_CH_penalized)
+#REP_model_CH_penalized
+#confusionMatrix(REP_model_CH_penalized, norm="average")
+
+# Hegre and Sambanis LR Model (2006) Uncorrected
+REP_model_HS_uncorrected <- train(HS_spec,
+                                  metric="ROC", method="glm", family="binomial", 
+                                  trControl=tc_original, data=data)
+
+#summary(REP_model_HS_uncorrected) ## provides coefficients & traditional R model output
+#REP_model_HS_uncorrected ## provides CV summary stats
+#confusionMatrix(REP_model_HS_uncorrected, norm="average") ## confusion matrix for predicted classes
+
+# Hegre and Sambanis LR Model (2006) Penalized
+REP_model_HS_penalized <- train(HS_spec,
+                                metric="ROC", method="plr", # Firth's penalized LR
+                                trControl=tc_original, data=data)
+#summary(REP_model_HS_penalized)
+#REP_model_HS_penalized
+#confusionMatrix(REP_model_HS_penalized, norm="average")
+
+# Random Forest Model on author specification (2016)
+REP_model_AS_RF <- train(author_spec,
+                         metric="ROC", method="rf",
+                         sampsize=c(30,90), ## Downsampling the class-imbalanced DV
+                         importance=T, ## Variable importance measures retained
+                         proximity=F, ntree=1000, ## number of trees grown
+                         trControl=tc_original, data=data)
+#summary(REP_model_AS_RF)
+#REP_model_AS_RF
+#confusionMatrix(REP_model_AS_RF, norm="average")
+```
+
 ## Training Insights
-A major problem we noticed with the original implementation was that the initially commented out random forest training process included an option for down-sampling, whereas the other logistic regression training processes didn't have this option specified. 
+A major problem we noticed with the original implementation was that the initially commented out random forest training process included an option for down-sampling, whereas the other logistic regression training processes didn't have this option specified. As they weren't presented on the paper, we chose to not include those random forest models (except for author specification 88 variables) in our replication above. This has the potential to yield unfair comparisons, so we decided to remove down-sampling option in our own implementations. 
 
-This has the potential to yield unfair comparisons, so we decided to remove down-sampling option. For dealing with class-imbalance, we will train models with our SMOTEd dataset later and test them on unseen, original (not artifically generated by SMOTE) data.
+Perhaps the biggest problem is that the authors have only used an in-sample accuracy metric to report the performance of their models which couldn't be directly inferred from the paper otherwise. Hence, the reported performance measures on the paper don't really give us much insight into how these models might behave with unseen data. In order to assess performance, we have to test our models for **out-of-sample data** ```data_test``` while training our models on the seperated ```data_train```. 
 
-We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train a fifth instance with author specification (88 variables), but instead on the ```data_train_balanced``` dataset this time. For each of the 5 instances of training, we will include a i) logistic regression model (LR) with uncorrected logits, ii) a logistic regression model (LR) with penalized logits using Firth's method, and iii) a random forest model (RF). All of the models use the cross-validation training control, ```tc```, implemented in the above code block.
+The already mentioned problem with index argument of the training controls and uncorrect seed setting unfortunately makes the results of the paper completely unreplicable. One can uncomment the 3 lines of summary reporting below each model in the above code block to observe how ROC values changes (although in miniscule amounts) with every training instance. This could be confirmed by running the same corresponding lines from author's original code included in ```data/Comparing+Random+Forest+with+Logistic+Regression+R+Code.R``` and observing how ROC values changes (although in miniscule amounts) again. It seems that the author's were unaware of the unreplicability of their results as they included hardcoded values for their AUC measures. In contrast, uncommenting the 3 lines of summary reporting below each model in the below code block should showcase how ROC values are preserved and hence prove the replicability of our implementation.
 
-## Training Processes
+We will first train the 4 specifications mentioned in the paper with the ```data_train``` dataset, which was acquired by split (based on year) from the ```data_HS_imputed``` dataset provided by the authors. Then, finally, we will train a fifth instance with author specification (88 variables), but instead on the ```data_train_balanced``` dataset this time. As previously mentioned, this dataset was created with the SMOTE algorithm to deal with the class-imbalance in the dataset. For each of the 5 instances of training, we will include 
+  i) a logistic regression model (LR) with uncorrected logits, 
+  ii) a logistic regression model (LR) with penalized logits using Firth's method, and 
+  iii) a random forest model (RF). 
+
+All of the models use the corrected version of the cross-validation training control, ```tc```, implemented in the above code block.
+
+## Our Own Training Processes
 1) Fearon and Laitin specification (2003) consisting of 11 variables
 ```{r LR-vs-RF-on-FL-specification}
 set.seed(666) ## the most metal seed for CV
@@ -288,47 +398,15 @@ model_FL_penalized <- train(FL_spec,
 model_FL_RF <- train(FL_spec,
                      metric="ROC", method="rf",
                      trControl=tc, data=data_train)
-
-
 #summary(model_FL_RF)
 #model_FL_RF
 #confusionMatrix(model_FL_RF, norm="average")
 ```
 
-```{r pred-test}
-
-# Testing/predictions for Fearon and Laitin specification (2003)
-FL_uncorrected_pred_raw <- predict(model_FL_uncorrected, newdata=data_test, type="raw")
-FL_uncorrected_pred_prob <- predict(model_FL_uncorrected, newdata=data_test, type="prob")
-FL_penalized_pred_raw <- predict(model_FL_penalized, newdata=data_test, type="raw")
-FL_penalized_pred_prob <- predict(model_FL_penalized, newdata=data_test, type="prob")
-FL_RF_pred_raw <- predict(model_FL_RF, newdata=data_test, type="raw")
-FL_RF_pred_prob <- predict(model_FL_RF, newdata=data_test, type="prob")
-
-par(pty = "s")
-
-# Plot ROC curves for prediction with Fearon and Laitin specification (2003)
-plot.roc(data_test$warstds, FL_uncorrected_pred_prob$war, col="blue",
-         xlim=c(1,0), las=1, bty="n", asp=NA,
-         main="Out-of-sample ROC Curves for Models w/ FL spec (2003)")
-plot.roc(data_test$warstds, add=T, FL_penalized_pred_prob$war, col="red")
-plot.roc(data_test$warstds, add=T, FL_RF_pred_prob$war, col="darkgreen")
-legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
-                              round(as.numeric(roc(data_test$warstds,
-                                                   FL_uncorrected_pred_prob$war)$auc),3)),
-                        paste("(2) Penalized LR, AUC:",
-                              round(as.numeric(roc(data_test$warstds,
-                                                   FL_penalized_pred_prob$war)$auc),3)),
-                        paste("(3) Random Forest, AUC:",
-                              round(as.numeric(roc(data_test$warstds,
-                                                   FL_RF_pred_prob$war)$auc),3))),
-       text.col=c("blue","red","darkgreen"),  
-       cex = .75)
-```
-
 2) Collier and Hoeffler specification (2004) consisting of 12 variables
 ```{r LR-vs-RF-on-CH-specification}
 set.seed(666) ## the most metal seed for CV
+
 # Collier and Hoeffler LR Model (2004) Uncorrected
 model_CH_uncorrected <- train(CH_spec,
                               metric="ROC", method="glm", family="binomial", 
@@ -363,7 +441,6 @@ set.seed(666) ## the most metal seed for CV
 model_HS_uncorrected <- train(HS_spec,
                               metric="ROC", method="glm", family="binomial", 
                               trControl=tc, data=data_train)
-
 #summary(model_HS_uncorrected) ## provides coefficients & traditional R model output
 #model_HS_uncorrected ## provides CV summary stats
 #confusionMatrix(model_HS_uncorrected, norm="average") ## confusion matrix for predicted classes
@@ -393,24 +470,23 @@ set.seed(666) ## the most metal seed for CV
 model_AS_uncorrected <- train(author_spec,
                               metric="ROC", method="glm", family="binomial", 
                               trControl=tc, data=data_train)
-
 #summary(model_AS_uncorrected) ## provides coefficients & traditional R model output
 #model_AS_uncorrected ## provides CV summary stats
 #confusionMatrix(model_AS_uncorrected, norm="average") ## confusion matrix for predicted classes
 
-# Author specification (2016) LR Model Penalized (TAKING TOO LONG FOR SOME REASON...)
-# model_AS_penalized <- train(author_spec,
-#                             metric="ROC", method="plr", # Firth's penalized LR
-#                             trControl=tc, data=data_train)
+# Author specification (2016) LR Model Penalized (CAUTION: estimated training time ~30 min)
+model_AS_penalized <- train(author_spec,
+                            metric="ROC", method="plr", # Firth's penalized LR
+                            trControl=tc, data=data_train)
 #summary(model_AS_penalized)
 #model_AS_penalized
 #confusionMatrix(model_AS_penalized, norm="average")
 
-# Random Forest Model on author specification (2016) (TAKING TOO LONG FOR SOME REASON...)
-# model_AS_RF <- train(author_spec,
-#                      metric="ROC", method="rf",
-#                      importance=T, ## Variable importance measures retained
-#                      trControl=tc, data=data_train)
+# Random Forest Model on author specification (2016) (CAUTION: estimated training time ~30 min)
+model_AS_RF <- train(author_spec,
+                     metric="ROC", method="rf",
+                     importance=T, ## Variable importance measures retained
+                     trControl=tc, data=data_train)
 #summary(model_AS_RF)
 #model_AS_RF
 #confusionMatrix(model_AS_RF, norm="average")
@@ -424,7 +500,6 @@ set.seed(666) ## the most metal seed for CV
 model_AS_uncorrected_smoted <- train(author_spec,
                                      metric="ROC", method="glm", family="binomial", 
                                      trControl=tc, data=data_train_balanced)
-
 #summary(model_AS_uncorrected_smoted) ## provides coefficients & traditional R model output
 #model_AS_uncorrected_smoted ## provides CV summary stats
 #confusionMatrix(model_AS_uncorrected_smoted, norm="average") ## confusion matrix for predicted classes
@@ -437,6 +512,9 @@ model_AS_penalized_smoted <- train(author_spec,
 #model_AS_penalized_smoted
 #confusionMatrix(model_AS_penalized_smoted, norm="average")
 
+
+## with different smote neighbour settings
+
 # Random Forest Model on author specification (2016)
 model_AS_RF_smoted <- train(author_spec,
                             metric="ROC", method="rf",
@@ -444,10 +522,45 @@ model_AS_RF_smoted <- train(author_spec,
                             sampsize=c(30,90), # ADDED
                             proximity=F, ntree=100,  # ADDED
                             trControl=tc, data=data_train_balanced)
-#summary(model_AS_RF_smoted)
-#model_AS_RF_smoted
-#confusionMatrix(model_AS_RF_smoted, norm="average")
+
+# Author specification (2016) LR Model Uncorrected
+model_AS_uncorrected_smoted_2 <- train(author_spec,
+                                     metric="ROC", method="glm", family="binomial", 
+                                     trControl=tc, data=data_train_balanced_2)
+
+# Author specification (2016) LR Model Penalized
+model_AS_penalized_smoted_2 <- train(author_spec,
+                                   metric="ROC", method="plr", # Firth's penalized LR
+                                   trControl=tc, data=data_train_balanced_2)
+# Random Forest Model on author specification (2016)
+model_AS_RF_smoted_2 <- train(author_spec,
+                            metric="ROC", method="rf",
+                            importance=T, ## Variable importance measures retained
+                            sampsize=c(30,90), # ADDED
+                            proximity=F, ntree=100,  # ADDED
+                            trControl=tc, data=data_train_balanced_2)
+
+# Author specification (2016) LR Model Uncorrected
+model_AS_uncorrected_smoted_3 <- train(author_spec,
+                                     metric="ROC", method="glm", family="binomial", 
+                                     trControl=tc, data=data_train_balanced_3)
+
+# Author specification (2016) LR Model Penalized
+model_AS_penalized_smoted_3 <- train(author_spec,
+                                   metric="ROC", method="plr", # Firth's penalized LR
+                                   trControl=tc, data=data_train_balanced_3)
+# Random Forest Model on author specification (2016)
+model_AS_RF_smoted_3 <- train(author_spec,
+                            metric="ROC", method="rf",
+                            importance=T, ## Variable importance measures retained
+                            sampsize=c(30,90), # ADDED
+                            proximity=F, ntree=100,  # ADDED
+                            trControl=tc, data=data_train_balanced_3)
+
+
+
 ```
+
 
 # Experimenting with Different Models
 In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. 
@@ -457,7 +570,6 @@ Boosted Classification Trees: After running some parameter grid searches, we not
 Decision Tree: The simpler Decision Tree model was not able to capture the nature of the dataset that well or achieve such results. Yet, the 
 
 ```{r different-models}
-
 # This is the Decision Tree model that we implemented
 model_AS_DT <- train(author_spec,
                       metric="ROC",
@@ -473,8 +585,6 @@ model_AS_Boost <- train(author_spec,
                         trControl=tc,
                         tuneGrid=data.frame(.iter=150, .maxdepth=3, .nu=0.01),
                         data=data_train)
-
-
 ```
 
 ```{r decision-tree-visualization}
@@ -486,9 +596,36 @@ prp(model_AS_DT$finalModel, box.palette = "Blues", tweak = 1.2)
 
 # Variable Importance for Random Forest Models
 One advantage of the Random Forests algorithm is that it is easy to interpret, robust to outliers and noise, and allows the analyst to infer causal mechanisms. Although the paper has serious methodological flaws, we think that its suggestion of Random Forests is well-grounded. The original R code by authors visualizes the variable importance for a Random Forest Model trained on the ```data_AM_imputed``` dataset, however we **dropped** that dataset as discussed before. It makes the most sense to us to visualize the variable importance on the 5 different random forest models we trained in the previous segment, 4 on ```data_train``` and 1 on ```data_train_balanced``` to be exact. By doing this, we can achieve: 
-
   i) See if theories suggested by different parties on theoretical variables deciding a civil war onset   agree with our findings or not, 
-  ii) Observe if any variables are deemed to be `unimportant` by the random forest algorithm, measured   by mean decrease in Gini classification measure in the case that they are not considered in training,   iii) Observe the difference of variable importance on random forests models trained on original        training set and artifically created training set, and essentially see how the SMOTE algorithms        affects this measure.
+  ii) Observe if any variables are deemed to be `unimportant` by the random forest algorithm, measured by mean decrease in Gini classification measure in the case that they are not considered in training,
+  iii) Observe the difference of variable importance on random forests models trained on original training set and artifically created training set, and essentially see how the SMOTE algorithms affects this measure.
+  
+## Replicating Author's Variable Importance Visualizations
+Before diving into our own versions, let's see if we get the same results with the paper on variable importance of a random forest model trained on ```data_AM_imputed```.
+```{r variable-importance-replication}
+## Random Forests on Amelia Imputed Data for Variable Importance Plot
+## Data Imputed only for Theoretically Important Variables
+## Done to analyze causal mechanisms
+
+# Author removes unnecessary columns from the dataset
+removed_vars <- names(data_AM_imputed) %in% c("X", "country", "year", "atwards") 
+data_AM_imputed <- data_AM_imputed[!removed_vars]
+
+REP_model_AM_imputed <-randomForest(as.factor(warstds)~., # new spec: all columns in Amelia dataset
+                                    sampsize=c(30, 90), # downsampling
+                                    importance=T, proximity=F, ntree=1000, 
+                                    confusion=T, err.rate=T, data=data_AM_imputed)
+# NOTE: The downsampling is random at each run due to incorrect seed setting (not replicable)
+
+varImpPlot(REP_model_AM_imputed, sort=T, type=2, 
+           main="Variables Contributing Most to Predictive Accuracy of Random Forests",
+           n.var=20)
+
+## Creating dotplot for Variable Importance Plot for RF
+#importance(REP_model_AM_imputed) # commented-out because prints a long list
+```
+
+One can check the full descriptions of the variables printed above on the y-axis of the Variable Importance table from the included ```data/Sambanis Appendix (Aug 06).pdf``` PDF file. When compared to the results from the paper, we see that roughly the same variables are included in the plot as the 20 most important variables. However, it could be easily observed that the order of these variables are different than those reported in the original paper. This is parallel to unreplicability issue mentioned previously. 
 
 ## Retraining Random Forest Models
 Firstly, we will retrain random forest models with the same specs and data mentioned above, but with ```randomForests()``` class this same in order to plot importance of variables. Note that these models will only be used to visualize variable importance, and will be dropped later in order to not cause any confusion.
@@ -507,7 +644,7 @@ AS_RF_smoted <- randomForest(author_spec, importance=T, proximity=F, ntree=num_t
                              confusion=T, err.rate=T, data=data_train_balanced)
 ```
 
-## Visualizing Variable Importances
+## Our Own Variable Importance Visualizations
 Now, we can visualize the variable importances for each of the random forest models trained above.
 ```{r variable-importance-based-on-RF-models}
 # Specify maximum number of variables (features) to be displayed
@@ -539,7 +676,34 @@ For each of the 3 models used for each of the 5 specifications and, we will use 
   i) type="raw" for number/class of predictions to be used in confusion matrices, and 
   ii) type="prob" for class probabilities to be used with ROC curves and computation of AUC metric.
 
-## Prediction Processes
+## Replicating Author's Prediction Processes
+We have previously discussed that the author's replicated models are trained on the entire ```HS_imputed``` dataset, predicted/tested on the same, entire dataset as well, and how this hurst the reliability of the performance measures reported in the original paper. Below is the corresponding replication.
+
+```{r testing-replication}
+# Testing/predictions for Fearon and Laitin specification (2003)
+REP_FL_uncorrected_pred_raw <- predict(REP_model_FL_uncorrected, newdata=data, type="raw")
+REP_FL_uncorrected_pred_prob <- predict(REP_model_FL_uncorrected, newdata=data, type="prob")
+REP_FL_penalized_pred_raw <- predict(REP_model_FL_penalized, newdata=data, type="raw")
+REP_FL_penalized_pred_prob <- predict(REP_model_FL_penalized, newdata=data, type="prob")
+
+# Testing/predictions for Collier and Hoeffler specification (2004)
+REP_CH_uncorrected_pred_raw <- predict(REP_model_CH_uncorrected, newdata=data, type="raw")
+REP_CH_uncorrected_pred_prob <- predict(REP_model_CH_uncorrected, newdata=data, type="prob")
+REP_CH_penalized_pred_raw <- predict(REP_model_CH_penalized, newdata=data, type="raw")
+REP_CH_penalized_pred_prob <- predict(REP_model_CH_penalized, newdata=data, type="prob")
+
+# Testing/predictions for Hegre and Sambanis specification (2006)
+REP_HS_uncorrected_pred_raw <- predict(REP_model_HS_uncorrected, newdata=data, type="raw")
+REP_HS_uncorrected_pred_prob <- predict(REP_model_HS_uncorrected, newdata=data, type="prob")
+REP_HS_penalized_pred_raw <- predict(REP_model_HS_penalized, newdata=data, type="raw")
+REP_HS_penalized_pred_prob <- predict(REP_model_HS_penalized, newdata=data, type="prob")
+
+# Testing/predictions for author specification (2016)
+REP_AS_RF_pred_raw <- predict(REP_model_AS_RF, newdata=data, type="raw")
+REP_AS_RF_pred_prob <- predict(REP_model_AS_RF, newdata=data, type="prob")
+```
+
+## Our Own Prediction Processes
 ```{r testing-trained-models-on-out-of-sample-data}
 # Testing/predictions for Fearon and Laitin specification (2003)
 FL_uncorrected_pred_raw <- predict(model_FL_uncorrected, newdata=data_test, type="raw")
@@ -565,21 +729,14 @@ HS_penalized_pred_prob <- predict(model_HS_penalized, newdata=data_test, type="p
 HS_RF_pred_raw <- predict(model_HS_RF, newdata=data_test, type="raw")
 HS_RF_pred_prob <- predict(model_HS_RF, newdata=data_test, type="prob")
 
-# Testing/predictions for author specification (2016)
+#Testing/predictions for author specification (2016)
 AS_uncorrected_pred_raw <- predict(model_AS_uncorrected, newdata=data_test, type="raw")
 AS_uncorrected_pred_prob <- predict(model_AS_uncorrected, newdata=data_test, type="prob")
-# AS_penalized_pred_raw <- predict(model_AS_penalized, newdata=data_test, type="raw")
-# AS_penalized_pred_prob <- predict(model_AS_penalized, newdata=data_test, type="prob")
-# AS_RF_pred_raw <- predict(model_AS_RF, newdata=data_test, type="raw")
-# AS_RF_pred_prob <- predict(model_AS_RF, newdata=data_test, type="prob")
+AS_penalized_pred_raw <- predict(model_AS_penalized, newdata=data_test, type="raw")
+AS_penalized_pred_prob <- predict(model_AS_penalized, newdata=data_test, type="prob")
+AS_RF_pred_raw <- predict(model_AS_RF, newdata=data_test, type="raw")
+AS_RF_pred_prob <- predict(model_AS_RF, newdata=data_test, type="prob")
 
-# Testing/prediction for author specification (2016) trained on SMOTEd dataset
-AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
-AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
-AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
-AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
-AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
-AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
 
 # Testing/prediction for additional Machine Learning models
 AS_DT_pred_raw <- predict(model_AS_DT, newdata=data_test, type="raw")
@@ -588,40 +745,137 @@ AS_Boost_pred_raw <- predict(model_AS_Boost, newdata=data_test, type="raw")
 AS_Boost_pred_prob <- predict(model_AS_Boost, newdata=data_test, type="prob")
 ```
 
-## Confusion Matrices
-Let's draw the confusion matrices for each instance.
+
+```{r smoted-variation-models-test}
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
+
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw_2 <- predict(model_AS_uncorrected_smoted_2, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob_2 <- predict(model_AS_uncorrected_smoted_2, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw_2 <- predict(model_AS_penalized_smoted_2, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob_2 <- predict(model_AS_penalized_smoted_2, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw_2 <- predict(model_AS_RF_smoted_2, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob_2 <- predict(model_AS_RF_smoted_2, newdata=data_test, type="prob")
+
+
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw_3 <- predict(model_AS_uncorrected_smoted_3, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob_3 <- predict(model_AS_uncorrected_smoted_3, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw_3 <- predict(model_AS_penalized_smoted_3, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob_3 <- predict(model_AS_penalized_smoted_3, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw_3 <- predict(model_AS_RF_smoted_3, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob_3 <- predict(model_AS_RF_smoted_3, newdata=data_test, type="prob")
+```
+
+
+## Confusion Matrices and F1 scores
+Let's draw the confusion matrices for each instance we trained in our own implementation.
 ```{r confusion-matrices}
 # Confusion matrices for prediction with Fearon and Laitin specification (2003)
 table(pred=FL_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=FL_penalized_pred_raw, obs=data_test$warstds)
 table(pred=FL_RF_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, FL_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, FL_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, FL_RF_pred_raw, positive = "war")
 
 # Confusion matrices for prediction with Collier and Hoeffler specification (2004)
 table(pred=CH_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=CH_penalized_pred_raw, obs=data_test$warstds)
 table(pred=CH_RF_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, CH_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, CH_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, CH_RF_pred_raw, positive = "war")
 
 # Confusion matrices for prediction with Hegre and Sambanis specification (2006)
 table(pred=HS_uncorrected_pred_raw, obs=data_test$warstds)
 table(pred=HS_penalized_pred_raw, obs=data_test$warstds)
 table(pred=HS_RF_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, HS_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, HS_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, HS_RF_pred_raw, positive = "war")
 
 # Confusion matrices for prediction with author specification (2016)
-table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
+#table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
 # table(pred=AS_penalized_pred_raw, obs=data_test$warstds)
 # table(pred=AS_RF_pred_raw, obs=data_test$warstds)
 
+# Confusion matrices for prediction with author specification using additional models
+table(pred=AS_DT_pred_raw, obs=data_test$warstds)
+table(pred=AS_Boost_pred_raw, obs=data_test$warstds)
+F1_Score(data_test$warstds, AS_DT_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_Boost_pred_raw, positive = "war")
+```
+
+```{r Smoted-dataset-confusion-matrix-and-f1-scores}
 # Confusion matrices for prediction with author specification (2016) trained on SMOTEd dataset
 table(pred=AS_uncorrected_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
 
-# Confusion matrices for prediction with author specification using additional models
-table(pred=AS_DT_pred_raw, obs=data_test$warstds)
-table(pred=AS_Boost_pred_raw, obs=data_test$warstds)
+table(pred=AS_uncorrected_smoted_pred_raw_2, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw_2, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_2, obs=data_test$warstds)
+
+table(pred=AS_uncorrected_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_3, obs=data_test$warstds)
+
+F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_2, positive = "war")
+F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_3, positive = "war")
+
+F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_2, positive = "war")
+F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_3, positive = "war")
+
+
+F1_Score(data_test$warstds, AS_RF_smoted_pred_raw, positive = "war")
+F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_2, positive = "war")
+F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_3, positive = "war")
 ```
 
-## Seperation Plots
+
+
+## Replicating Author's Seperation Plots
+```{r seperation-plots-replication}
+# Seperation plot for prediction with Fearon and Laitin specification (2003) uncorrected LR
+separationplot(REP_FL_uncorrected_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Fearon and Laitin Spec (2003) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plot for prediction with Collier and Hoeffler specification (2004) uncorrected LR
+separationplot(REP_CH_uncorrected_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Collier and Hoeffler Spec (2004) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plot for prediction with Hegre and Sambanis specification (2006) uncorrected LR
+separationplot(REP_HS_uncorrected_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Hegre and Sambanis Spec (2006) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plot for prediction with Hegre and Sambanis specification (2006) uncorrected LR
+separationplot(REP_AS_RF_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Author Spec (2016) Random Forests Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+```
+Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the tree logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
+
+## Our Own Seperation Plots
 Let's draw the seperation plots for each instance.
 ```{r seperation-plots}
 # Seperation plots for prediction with Fearon and Laitin specification (2003)
@@ -681,16 +935,16 @@ separationplot(AS_uncorrected_pred_prob$war,
                line=T, lwd2=1, show.expected=T,
                heading="Author Spec (2016) Uncorrected LR Seperation Plot",
                height=1.5, col0="white", col1="black", newplot=F)
-# separationplot(AS_penalized_pred_prob$war,
-#                as.numeric(data_test$warstds)-1, type="line",
-#                line=T, lwd2=1, show.expected=T,
-#                heading="Author Spec (2016) Penalized LR Seperation Plot",
-#                height=1.5, col0="white", col1="black", newplot=F)
-# separationplot(AS_RF_pred_prob$war,
-#                as.numeric(data_test$warstds)-1, type="line",
-#                line=T, lwd2=1, show.expected=T,
-#                heading="Author Spec (2016) RF Seperation Plot",
-#                height=1.5, col0="white", col1="black", newplot=F)
+separationplot(AS_penalized_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Author Spec (2016) Penalized LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+separationplot(AS_RF_pred_prob$war,
+               as.numeric(data_test$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="Author Spec (2016) RF Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
 
 # Seperation plots for prediction with author specification (2016) trained on SMOTEd dataset
 separationplot(AS_uncorrected_smoted_pred_prob$war,
@@ -709,6 +963,57 @@ separationplot(AS_RF_smoted_pred_prob$war,
                heading="Author Spec (2016) RF (SMOTEd) Seperation Plot",
                height=1.5, col0="white", col1="black", newplot=F)
 ```
+
+## Replicating Author's ROC Curves with AUC Scores
+```{r roc-curves-replication}
+# Plot ROC curves for prediction comparing uncorrected FL (2003), CH (2004), 
+# and HS (2006) specs, as well as the Random Forests models (author's versions)
+plot.roc(data$warstds, REP_FL_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="REP: Uncorrected Logits and Random Forests")
+plot.roc(data$warstds, add=T, REP_CH_uncorrected_pred_prob$war, col="red")
+plot.roc(data$warstds, add=T, REP_HS_uncorrected_pred_prob$war, col="purple")
+plot.roc(data$warstds, add=T, REP_AS_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) REP: FL (2003) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_FL_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) REP: CH (2004) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_CH_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(3) REP: HS (2006) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_HS_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(4) REP: AS (2016) Random Forest, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_AS_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","purple", "darkgreen"),  
+       cex = .75)
+
+# Plot ROC curves for prediction comparing penalized FL (2003), CH (2004), 
+# and HS (2006) specs, as well as the Random Forests models (author's versions)
+plot.roc(data$warstds, REP_FL_penalized_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="REP: Penalized Logits and Random Forests")
+plot.roc(data$warstds, add=T, REP_CH_penalized_pred_prob$war, col="red")
+plot.roc(data$warstds, add=T, REP_HS_penalized_pred_prob$war, col="purple")
+plot.roc(data$warstds, add=T, REP_AS_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) REP: FL (2003) Penalized LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_FL_penalized_pred_prob$war)$auc),3)),
+                        paste("(2) REP: CH (2004) Penalized LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_CH_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) REP: HS (2006) Penalized LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_HS_penalized_pred_prob$war)$auc),3)),
+                        paste("(4) REP: AS (2016) Random Forest, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_AS_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","purple", "darkgreen"),  
+       cex = .75)
+
+```
+The unreplicability of the results are justified most with the reported ROC curves and accompanying AUC curves as shown above. It should be remembered that the curves and measures presented above are NOT tested with **out-of-sample** data, rather they simply act as a training summary. This explains the high AUC score of the random forest model.
 
 ## ROC Curves with AUC Scores
 Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: 
@@ -778,22 +1083,29 @@ legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
        cex = .75)
 
 # Plot ROC curves for prediction with author specification (2016)
-# plot.roc(data_test$warstds, AS_uncorrected_pred_prob$war, col="blue",
-#          xlim=c(1,0), las=1, bty="n", asp=NA,
-#          main="Out-of-sample ROC Curves for Models w/ author spec (2016)")
-# plot.roc(data_test$warstds, add=T, AS_penalized_pred_prob$war, col="red")
-# plot.roc(data_test$warstds, add=T, AS_RF_pred_prob$war, col="darkgreen")
-# legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
-#                               round(as.numeric(roc(data_test$warstds,
-#                                                    AS_uncorrected_pred_prob$war)$auc),3)),
-#                         paste("(2) Penalized LR, AUC:",
-#                               round(as.numeric(roc(data_test$warstds,
-#                                                    AS_penalized_pred_prob$war)$auc),3)),
-#                         paste("(3) Random Forest, AUC:",
-#                               round(as.numeric(roc(data_test$warstds,
-#                                                    AS_RF_pred_prob$war)$auc),3))),
-#        text.col=c("blue","red","darkgreen"),
-#        cex = .75)
+plot.roc(data_test$warstds, AS_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec (2016)")
+plot.roc(data_test$warstds, add=T, AS_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+
+```
+
+
+
+```{r roc-for-smoted-variations}
+
 
 # Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
 plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob$war, col="blue",
@@ -812,6 +1124,44 @@ legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
                                                    AS_RF_smoted_pred_prob$war)$auc),3))),
        text.col=c("blue","red","darkgreen"),
        cex = .75)
+
+# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
+plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob_2$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec 2 (2016) (SMOTEd)")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob_2$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob_2$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob_2$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob_2$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob_2$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+
+# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
+plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob_3$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec (2016) 3 (SMOTEd)")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob_3$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob_3$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob_3$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob_3$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob_3$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+
+
 ```
 
 ### Grouped By Model Types
@@ -847,7 +1197,61 @@ legend("bottomright", c(paste("(1) FL (2003), AUC:",
        text.col=c("blue","red","darkgreen", "purple", "goldenrod"),  
        cex = .75)
 
-#### PLOT THE OTHER ROC CURVES WHEN AS (2016) PENALIZED LR & RF MODELS ARE TRAINED ####
+# Plot ROC curves for prediction with penalized logistic regression model
+plot.roc(data_test$warstds, FL_penalized_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for penalized LR Models")
+plot.roc(data_test$warstds, add=T, CH_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, HS_penalized_pred_prob$war, col="darkgreen")
+plot.roc(data_test$warstds, add=T, AS_penalized_pred_prob$war, col="purple")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob$war, col="goldenrod")
+
+legend("bottomright", c(paste("(1) FL (2003), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_penalized_pred_prob$war)$auc),3)),
+                        paste("(2) CH (2004), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   CH_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) HS (2006), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   HS_penalized_pred_prob$war)$auc),3)),
+                        paste("(4) AS (2016), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_pred_prob$war)$auc),3)),
+                        paste("(5) AS (2016) SMOTE, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob$war)$auc),3))),
+       
+       text.col=c("blue","red","darkgreen", "purple", "goldenrod"),  
+       cex = .75)
+
+# Plot ROC curves for prediction with random forest model
+plot.roc(data_test$warstds, FL_penalized_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for penalized LR Models")
+plot.roc(data_test$warstds, add=T, CH_penalized_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, HS_penalized_pred_prob$war, col="darkgreen")
+plot.roc(data_test$warstds, add=T, AS_penalized_pred_prob$war, col="purple")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob$war, col="goldenrod")
+
+legend("bottomright", c(paste("(1) FL (2003), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   FL_RF_pred_prob$war)$auc),3)),
+                        paste("(2) CH (2004), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   CH_RF_pred_prob$war)$auc),3)),
+                        paste("(3) HS (2006), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   HS_RF_pred_prob$war)$auc),3)),
+                        paste("(4) AS (2016), AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_pred_prob$war)$auc),3)),
+                        paste("(5) AS (2016) SMOTE, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob$war)$auc),3))),
+       
+       text.col=c("blue","red","darkgreen", "purple", "goldenrod"),  
+       cex = .75)
 ```
 
 # Dependencies Summary
@@ -855,6 +1259,29 @@ The following is a list of all packages used to generate these results.
 ```{r}
 sessionInfo()
 ```
+
+#Comments regarding the reproducibility of the original paper
+eg. F1 score variation plot couldn't be replicated because the author's paper did not make these training test split ratios clear. We do not know the seed they used to shuffle their data. We can definitely split our data as per different ratios but we do not get exactly similar characteristics in the resulting training - test set (basically war - peace ratio samples)
+
+
+#Summary of changes made to original paper and extensions
+i) The original paper used different feature variables for each of the four models. To make the comparison fair, we have tested the performance of the four models across all set of features specified in the paper.
+ii) Instead of measuring the performance only on the training data set, we do a train - test split to test performance on out of sample data
+iii) Since we are working with an imbalanced dataset, we have used SMOTE to generate a more balanced version of the data. We have trained our 4 models on this data and monitored their performance
+iv) We have also trained and checked the performance of new models -  decision trees, boosting, neural networks
+
+#Comparing our models / findings
+add detailed results and comparisons for F1 score and AUC
+
+notes about smote - We tried variations for different nearest neighbours, upsampling and downsampling. While our ROC score is comparable, F1 score is quite poor. Since test set is still skewed and training set reasonably balanced, our model estimates far more cases of False positives on the test. Hence, the precision is low and that leads to low F1 score.We believe that ROC is a much more important metric in this case.
+
+We also noticed that while the ROC score for different settings in smote was somewhat similar, the confusion matrix generated varied considerably in terms if the number of false positives. For eg. with 20 nearest neighbours far more false positives were generated than with 5 nearest neighbours. 
+
+We have commented out/not included the code for these multiple variations to avoid unnecessary clutter.
+
+
+
+#Final comments on the original paper
 
 # References
 ## Related Papers & Datasets
