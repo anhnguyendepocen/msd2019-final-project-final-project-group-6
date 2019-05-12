@@ -450,7 +450,11 @@ model_AS_RF_smoted <- train(author_spec,
 ```
 
 # Experimenting with Different Models
-In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. After running some parameter grid searches, we noticed that the Boosted Classification Trees model with the parameters below can achieve an AUC score of 0.922. The simpler Decision Tree model was not able to capture the nature of the dataset that well or achieve such results.
+In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. 
+
+Boosted Classification Trees: After running some parameter grid searches, we noticed that the Boosted Classification Trees model with the parameters below can achieve an AUC score of 0.922. The Boosted Classification Trees uses Adaptive Boosting which aims to combine a number of weak classifiers and predict based on the majority. More clearly, first, Adaptive Boosting trains a variety of waeak classifiers. Those that have >50% accuracy receive a positive weight whereas those that have <50% accuracy receive negative weight. Thus, even those classifiers that are unsuccessful at the task can be incorporated and used as part of the ensemble. 
+
+Decision Tree: The simpler Decision Tree model was not able to capture the nature of the dataset that well or achieve such results. Yet, the 
 
 ```{r different-models}
 
@@ -462,6 +466,7 @@ model_AS_DT <- train(author_spec,
                       data=data_train)
 
 # This is the Boosted Classifiaction Trees model that we implemented
+# The model uses Adaptive Boosting
 model_AS_Boost <- train(author_spec,
                         metric="ROC",
                         method="ada",
