@@ -19,18 +19,19 @@ library(caret) # for training LR and RF models
 library(ROCR)
 library(pROC) # for plotting ROC curves
 library(stepPlr)
-library(doMC) # for distributed workload
+#library(doMC) # for distributed workload
 library(tidyverse)
 library(foreign) # for reading Stata .dta files
 library(maptools) # for displaying countries on world map
 library(DMwR) # for up-sampling with SMOTE
 library(separationplot) # for displaying seperation plots
+library(MLmetrics)
 
 theme_set(theme_bw())
 
 knitr::opts_chunk$set(echo = TRUE)
 
-registerDoMC(cores=7) ## distributing workload over multiple cores for faster computation
+#registerDoMC(cores=7) ## distributing workload over multiple cores for faster computation
 ```
 
 # Introduction
@@ -237,8 +238,17 @@ The ratio of war to peace in our training set is approx. 0.013 and in our test s
 ## SMOTE
 ```{r smote}
 # SMOTE for artificially creating a more balanced training dataset
-data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100)
+data_train_balanced <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k = 2)
 table(data_train_balanced$warstds)
+
+# SMOTE with changed 
+data_train_balanced_2 <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=100, k=5)
+table(data_train_balanced_2$warstds)
+
+# SMOTE with changed 
+data_train_balanced_3 <- SMOTE(warstds ~ ., data_train, perc.over = 600, perc.under=125, k=20)
+table(data_train_balanced_3$warstds)
+
 ```
 
 # Model Training
@@ -485,6 +495,9 @@ model_AS_penalized_smoted <- train(author_spec,
 #model_AS_penalized_smoted
 #confusionMatrix(model_AS_penalized_smoted, norm="average")
 
+
+## with different smote neighbour settings
+
 # Random Forest Model on author specification (2016)
 model_AS_RF_smoted <- train(author_spec,
                             metric="ROC", method="rf",
@@ -492,10 +505,46 @@ model_AS_RF_smoted <- train(author_spec,
                             sampsize=c(30,90), # ADDED
                             proximity=F, ntree=100,  # ADDED
                             trControl=tc, data=data_train_balanced)
-#summary(model_AS_RF_smoted)
-#model_AS_RF_smoted
-#confusionMatrix(model_AS_RF_smoted, norm="average")
+
+# Author specification (2016) LR Model Uncorrected
+model_AS_uncorrected_smoted_2 <- train(author_spec,
+                                     metric="ROC", method="glm", family="binomial", 
+                                     trControl=tc, data=data_train_balanced_2)
+
+# Author specification (2016) LR Model Penalized
+model_AS_penalized_smoted_2 <- train(author_spec,
+                                   metric="ROC", method="plr", # Firth's penalized LR
+                                   trControl=tc, data=data_train_balanced_2)
+# Random Forest Model on author specification (2016)
+model_AS_RF_smoted_2 <- train(author_spec,
+                            metric="ROC", method="rf",
+                            importance=T, ## Variable importance measures retained
+                            sampsize=c(30,90), # ADDED
+                            proximity=F, ntree=100,  # ADDED
+                            trControl=tc, data=data_train_balanced_2)
+
+# Author specification (2016) LR Model Uncorrected
+model_AS_uncorrected_smoted_3 <- train(author_spec,
+                                     metric="ROC", method="glm", family="binomial", 
+                                     trControl=tc, data=data_train_balanced_3)
+
+# Author specification (2016) LR Model Penalized
+model_AS_penalized_smoted_3 <- train(author_spec,
+                                   metric="ROC", method="plr", # Firth's penalized LR
+                                   trControl=tc, data=data_train_balanced_3)
+# Random Forest Model on author specification (2016)
+model_AS_RF_smoted_3 <- train(author_spec,
+                            metric="ROC", method="rf",
+                            importance=T, ## Variable importance measures retained
+                            sampsize=c(30,90), # ADDED
+                            proximity=F, ntree=100,  # ADDED
+                            trControl=tc, data=data_train_balanced_3)
+
+
+
 ```
+
+
 
 # Experimenting with Different Models
 In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. After running some parameter grid searches, we noticed that the Boosted Classification Trees model with the parameters below can achieve an AUC score of 0.922. The simpler Decision Tree model was not able to capture the nature of the dataset that well or achieve such results.
@@ -676,12 +725,49 @@ AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data
 AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
 AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
 
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
+
 # Testing/prediction for additional Machine Learning models
 AS_DT_pred_raw <- predict(model_AS_DT, newdata=data_test, type="raw")
 AS_DT_pred_prob <- predict(model_AS_DT, newdata=data_test, type="prob")
 AS_Boost_pred_raw <- predict(model_AS_Boost, newdata=data_test, type="raw")
 AS_Boost_pred_prob <- predict(model_AS_Boost, newdata=data_test, type="prob")
 ```
+
+
+```{r temporary addition - vatsala}
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob <- predict(model_AS_uncorrected_smoted, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw <- predict(model_AS_penalized_smoted, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob <- predict(model_AS_penalized_smoted, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw <- predict(model_AS_RF_smoted, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob <- predict(model_AS_RF_smoted, newdata=data_test, type="prob")
+
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw_2 <- predict(model_AS_uncorrected_smoted_2, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob_2 <- predict(model_AS_uncorrected_smoted_2, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw_2 <- predict(model_AS_penalized_smoted_2, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob_2 <- predict(model_AS_penalized_smoted_2, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw_2 <- predict(model_AS_RF_smoted_2, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob_2 <- predict(model_AS_RF_smoted_2, newdata=data_test, type="prob")
+
+
+# Testing/prediction for author specification (2016) trained on SMOTEd dataset
+AS_uncorrected_smoted_pred_raw_3 <- predict(model_AS_uncorrected_smoted_3, newdata=data_test, type="raw")
+AS_uncorrected_smoted_pred_prob_3 <- predict(model_AS_uncorrected_smoted_3, newdata=data_test, type="prob")
+AS_penalized_smoted_pred_raw_3 <- predict(model_AS_penalized_smoted_3, newdata=data_test, type="raw")
+AS_penalized_smoted_pred_prob_3 <- predict(model_AS_penalized_smoted_3, newdata=data_test, type="prob")
+AS_RF_smoted_pred_raw_3 <- predict(model_AS_RF_smoted_3, newdata=data_test, type="raw")
+AS_RF_smoted_pred_prob_3 <- predict(model_AS_RF_smoted_3, newdata=data_test, type="prob")
+```
+
 
 ## Confusion Matrices
 Let's draw the confusion matrices for each instance.
@@ -715,6 +801,10 @@ table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
 table(pred=AS_DT_pred_raw, obs=data_test$warstds)
 table(pred=AS_Boost_pred_raw, obs=data_test$warstds)
 ```
+
+
+
+
 
 ## Replicating Author's Seperation Plots
 ```{r seperation-plots-replication}
@@ -988,6 +1078,98 @@ legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
                                                    AS_RF_smoted_pred_prob$war)$auc),3))),
        text.col=c("blue","red","darkgreen"),
        cex = .75)
+```
+
+
+
+```{r temporary addition - vatsala}
+# Confusion matrices for prediction with author specification (2016) trained on SMOTEd dataset
+table(pred=AS_uncorrected_smoted_pred_raw, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw, obs=data_test$warstds)
+
+table(pred=AS_uncorrected_smoted_pred_raw_2, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw_2, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_2, obs=data_test$warstds)
+
+table(pred=AS_uncorrected_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_penalized_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_3, obs=data_test$warstds)
+
+
+# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
+plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec (2016) (SMOTEd)")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+
+# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
+plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob_2$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec 2 (2016) (SMOTEd)")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob_2$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob_2$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob_2$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob_2$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob_2$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+
+# Plot ROC curves for prediction with author specification (2016) trained SMOTEd dataset
+plot.roc(data_test$warstds, AS_uncorrected_smoted_pred_prob_3$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="Out-of-sample ROC Curves for Models w/ author spec (2016) 3 (SMOTEd)")
+plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob_3$war, col="red")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob_3$war, col="darkgreen")
+legend("bottomright", c(paste("(1) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_uncorrected_smoted_pred_prob_3$war)$auc),3)),
+                        paste("(2) Penalized LR, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_penalized_smoted_pred_prob_3$war)$auc),3)),
+                        paste("(3) Random Forest, AUC:",
+                              round(as.numeric(roc(data_test$warstds,
+                                                   AS_RF_smoted_pred_prob_3$war)$auc),3))),
+       text.col=c("blue","red","darkgreen"),
+       cex = .75)
+
+
+table(pred=AS_penalized_smoted_pred_raw_3, obs=data_test$warstds)
+table(pred=AS_RF_smoted_pred_raw_3, obs=data_test$warstds)
+
+
+AS_uncorrected_smoted_1_f1 = F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw, positive = "war")
+AS_uncorrected_smoted_2_f1 = F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_2, positive = "war")
+AS_uncorrected_smoted_3_f1 = F1_Score(data_test$warstds, AS_uncorrected_smoted_pred_raw_3, positive = "war")
+
+AS_penalized_smoted_1_f1 = F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw, positive = "war")
+AS_penalized_smoted_2_f1 = F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_2, positive = "war")
+AS_penalized_smoted_3_f1 = F1_Score(data_test$warstds, AS_penalized_smoted_pred_raw_3, positive = "war")
+
+
+AS_RF_smoted_1_f1 = F1_Score(data_test$warstds, AS_RF_smoted_pred_raw, positive = "war")
+AS_RF_smoted_2_f1 = F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_2, positive = "war")
+AS_RF_smoted_3_f1 = F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_3, positive = "war")
+
+
 ```
 
 ### Grouped By Model Types
