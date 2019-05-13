@@ -446,7 +446,7 @@ separationplot(REP_AS_RF_pred_prob$war,
                heading="REP: Author Spec (2016) Random Forests Seperation Plot",
                height=1.5, col0="white", col1="black", newplot=F)
 ```
-Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the tree logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
+Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the three logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
 
 ## Replicating F1 scores
 ```{r f1-score-replication-and-confusion-matrix}
@@ -1287,17 +1287,27 @@ The following is a list of all packages used to generate these results.
 sessionInfo()
 ```
 
-#Comments regarding the reproducibility of the original paper
-eg. F1 score variation plot couldn't be replicated because the author's paper did not make these training test split ratios clear. We do not know the seed they used to shuffle their data. We can definitely split our data as per different ratios but we do not get exactly similar characteristics in the resulting training - test set (basically war - peace ratio samples)
+# Brief Comments regarding the reproducibility of the original paper
+i) In terms of variable importance, we can see the same variables in the plot as the 20 most important variables. However, the order of these variables are different than those reported in the original paper
+ii) The F1 score variation plot couldn't be replicated because the author's paper did not make these training test split ratios clear. We do not know the seed they used to shuffle their data. We can definitely split our data as per different ratios but we do not get exactly similar characteristics in the resulting training - test set (basically war - peace ratio samples)
+iii)The seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the three logistic regression models. However, the plot for Random Forests model was different.
+iv) F1 score note - #add here what happens
+v) ROC curve
 
+# Analysis for the paper
+We observed some glaring issues in the paper -
+1. A lot of results/graphs could not be replicated and hence, we are not convinced that Random Forests was necessarily the best model possible.
+2. The results reported strangely did not use out-of-sample data.
+3. Different models were trained on different features. Yet, the author presented a comparison between them without accounting for this discrepancy in features.
+4. The original code given by the author did not contain replication for some important parts such as F1 scores.
 
-#Summary of changes made to original paper and extensions
+# Summary of changes made to original paper and extensions
 i) The original paper used different feature variables for each of the four models. To make the comparison fair, we have tested the performance of the four models across all set of features specified in the paper.
 ii) Instead of measuring the performance only on the training data set, we do a train - test split to test performance on out of sample data
 iii) Since we are working with an imbalanced dataset, we have used SMOTE to generate a more balanced version of the data. We have trained our models on this data and monitored their performance
 iv) We have also trained and checked the performance of new models on the original data - namely, Decision trees and Boosted Classification Trees
 
-#Comparing our models / findings
+# Comparing our models / findings
 add detailed results and comparisons for F1 score and AUC
 
 notes about smote - We tried variations for different nearest neighbours, upsampling and downsampling. While our ROC score is comparable, F1 score is quite poor. Since test set is still skewed and training set reasonably balanced, our model estimates far more cases of False positives on the test. Hence, the precision is low and that leads to low F1 score.We believe that ROC is a much more important metric in this case.
@@ -1306,9 +1316,6 @@ We also noticed that while the ROC score for different settings in smote was som
 
 We have commented out/not included the code for these multiple variations to avoid unnecessary clutter.
 
-
-
-#Final comments on the original paper
 
 # References
 ## Related Papers & Datasets
