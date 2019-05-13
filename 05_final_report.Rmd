@@ -295,6 +295,7 @@ tc <- trainControl(method="cv",
                    classProb=T)
 ```
 
+# Replication
 ## Replicating Author's Training Processes
 ```{r training-replication}
 # Fearon and Laitin LR Model (2003) Uncorrected
@@ -357,6 +358,163 @@ REP_model_AS_RF <- train(author_spec,
 #REP_model_AS_RF
 #confusionMatrix(REP_model_AS_RF, norm="average")
 ```
+
+  
+## Replicating Author's Variable Importance Visualizations
+Before diving into our own versions, let's see if we get the same results with the paper on variable importance of a random forest model trained on ```data_AM_imputed```.
+```{r variable-importance-replication}
+## Random Forests on Amelia Imputed Data for Variable Importance Plot
+## Data Imputed only for Theoretically Important Variables
+## Done to analyze causal mechanisms
+
+# Author removes unnecessary columns from the dataset
+removed_vars <- names(data_AM_imputed) %in% c("X", "country", "year", "atwards") 
+data_AM_imputed <- data_AM_imputed[!removed_vars]
+
+REP_model_AM_imputed <-randomForest(as.factor(warstds)~., # new spec: all columns in Amelia dataset
+                                    sampsize=c(30, 90), # downsampling
+                                    importance=T, proximity=F, ntree=1000, 
+                                    confusion=T, err.rate=T, data=data_AM_imputed)
+# NOTE: The downsampling is random at each run due to incorrect seed setting (not replicable)
+
+varImpPlot(REP_model_AM_imputed, sort=T, type=2, 
+           main="Variables Contributing Most to Predictive Accuracy of Random Forests",
+           n.var=20)
+
+## Creating dotplot for Variable Importance Plot for RF
+#importance(REP_model_AM_imputed) # commented-out because prints a long list
+```
+
+One can check the full descriptions of the variables printed above on the y-axis of the Variable Importance table from the included ```data/Sambanis Appendix (Aug 06).pdf``` PDF file. When compared to the results from the paper, we see that roughly the same variables are included in the plot as the 20 most important variables. However, it could be easily observed that the order of these variables are different than those reported in the original paper. This is parallel to unreplicability issue mentioned previously.
+
+
+
+## Replicating Author's Prediction Processes
+We have previously discussed that the author's replicated models are trained on the entire ```HS_imputed``` dataset, predicted/tested on the same, entire dataset as well, and how this hurst the reliability of the performance measures reported in the original paper. Below is the corresponding replication.
+
+```{r testing-replication}
+# Testing/predictions for Fearon and Laitin specification (2003)
+REP_FL_uncorrected_pred_raw <- predict(REP_model_FL_uncorrected, newdata=data, type="raw")
+REP_FL_uncorrected_pred_prob <- predict(REP_model_FL_uncorrected, newdata=data, type="prob")
+REP_FL_penalized_pred_raw <- predict(REP_model_FL_penalized, newdata=data, type="raw")
+REP_FL_penalized_pred_prob <- predict(REP_model_FL_penalized, newdata=data, type="prob")
+
+# Testing/predictions for Collier and Hoeffler specification (2004)
+REP_CH_uncorrected_pred_raw <- predict(REP_model_CH_uncorrected, newdata=data, type="raw")
+REP_CH_uncorrected_pred_prob <- predict(REP_model_CH_uncorrected, newdata=data, type="prob")
+REP_CH_penalized_pred_raw <- predict(REP_model_CH_penalized, newdata=data, type="raw")
+REP_CH_penalized_pred_prob <- predict(REP_model_CH_penalized, newdata=data, type="prob")
+
+# Testing/predictions for Hegre and Sambanis specification (2006)
+REP_HS_uncorrected_pred_raw <- predict(REP_model_HS_uncorrected, newdata=data, type="raw")
+REP_HS_uncorrected_pred_prob <- predict(REP_model_HS_uncorrected, newdata=data, type="prob")
+REP_HS_penalized_pred_raw <- predict(REP_model_HS_penalized, newdata=data, type="raw")
+REP_HS_penalized_pred_prob <- predict(REP_model_HS_penalized, newdata=data, type="prob")
+
+# Testing/predictions for author specification (2016)
+REP_AS_RF_pred_raw <- predict(REP_model_AS_RF, newdata=data, type="raw")
+REP_AS_RF_pred_prob <- predict(REP_model_AS_RF, newdata=data, type="prob")
+```
+
+## Replicating Author's Seperation Plots
+```{r seperation-plots-replication}
+# Seperation plot for prediction with Fearon and Laitin specification (2003) uncorrected LR
+separationplot(REP_FL_uncorrected_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Fearon and Laitin Spec (2003) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plot for prediction with Collier and Hoeffler specification (2004) uncorrected LR
+separationplot(REP_CH_uncorrected_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Collier and Hoeffler Spec (2004) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plot for prediction with Hegre and Sambanis specification (2006) uncorrected LR
+separationplot(REP_HS_uncorrected_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Hegre and Sambanis Spec (2006) Uncorrected LR Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+
+# Seperation plot for prediction with Hegre and Sambanis specification (2006) uncorrected LR
+separationplot(REP_AS_RF_pred_prob$war,
+               as.numeric(data$warstds)-1, type="line",
+               line=T, lwd2=1, show.expected=T,
+               heading="REP: Author Spec (2016) Random Forests Seperation Plot",
+               height=1.5, col0="white", col1="black", newplot=F)
+```
+Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the tree logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
+
+## Replicating F1 scores
+```{r f1-score-replication-and-confusion-matrix}
+F1_Score(data_test$warstds, REP_FL_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, REP_FL_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, REP_CH_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, REP_CH_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, REP_HS_uncorrected_pred_raw, positive = "war")
+F1_Score(data_test$warstds, REP_HS_penalized_pred_raw, positive = "war")
+F1_Score(data_test$warstds, REP_AS_RF_pred_raw, positive = "war")
+
+```
+
+
+
+## Replicating Author's ROC Curves with AUC Scores
+```{r roc-curves-replication}
+# Plot ROC curves for prediction comparing uncorrected FL (2003), CH (2004), 
+# and HS (2006) specs, as well as the Random Forests models (author's versions)
+plot.roc(data$warstds, REP_FL_uncorrected_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="REP: Uncorrected Logits and Random Forests")
+plot.roc(data$warstds, add=T, REP_CH_uncorrected_pred_prob$war, col="red")
+plot.roc(data$warstds, add=T, REP_HS_uncorrected_pred_prob$war, col="purple")
+plot.roc(data$warstds, add=T, REP_AS_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) REP: FL (2003) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_FL_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(2) REP: CH (2004) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_CH_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(3) REP: HS (2006) Uncorrected LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_HS_uncorrected_pred_prob$war)$auc),3)),
+                        paste("(4) REP: AS (2016) Random Forest, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_AS_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","purple", "darkgreen"),  
+       cex = .75)
+
+# Plot ROC curves for prediction comparing penalized FL (2003), CH (2004), 
+# and HS (2006) specs, as well as the Random Forests models (author's versions)
+plot.roc(data$warstds, REP_FL_penalized_pred_prob$war, col="blue",
+         xlim=c(1,0), las=1, bty="n", asp=NA,
+         main="REP: Penalized Logits and Random Forests")
+plot.roc(data$warstds, add=T, REP_CH_penalized_pred_prob$war, col="red")
+plot.roc(data$warstds, add=T, REP_HS_penalized_pred_prob$war, col="purple")
+plot.roc(data$warstds, add=T, REP_AS_RF_pred_prob$war, col="darkgreen")
+legend("bottomright", c(paste("(1) REP: FL (2003) Penalized LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_FL_penalized_pred_prob$war)$auc),3)),
+                        paste("(2) REP: CH (2004) Penalized LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_CH_penalized_pred_prob$war)$auc),3)),
+                        paste("(3) REP: HS (2006) Penalized LR, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_HS_penalized_pred_prob$war)$auc),3)),
+                        paste("(4) REP: AS (2016) Random Forest, AUC:",
+                              round(as.numeric(roc(data$warstds,
+                                                   REP_AS_RF_pred_prob$war)$auc),3))),
+       text.col=c("blue","red","purple", "darkgreen"),  
+       cex = .75)
+
+```
+The unreplicability of the results are justified most with the reported ROC curves and accompanying AUC curves as shown above. It should be remembered that the curves and measures presented above are NOT tested with **out-of-sample** data, rather they simply act as a training summary. This explains the high AUC score of the random forest model.
+
+
+# Extensions/Improvements
 
 ## Training Insights
 A major problem we noticed with the original implementation was that the initially commented out random forest training process included an option for down-sampling, whereas the other logistic regression training processes didn't have this option specified. As they weren't presented on the paper, we chose to not include those random forest models (except for author specification 88 variables) in our replication above. This has the potential to yield unfair comparisons, so we decided to remove down-sampling option in our own implementations. 
@@ -562,7 +720,7 @@ model_AS_RF_smoted_3 <- train(author_spec,
 ```
 
 
-# Experimenting with Different Models
+## Experimenting with Different Models
 In order to assess whether Random Forest is the ideal model to capture the behavior of the data, we decided to experiment with some other Machine Learning models. 
 
 1) Decision Tree: The simpler Decision Tree model, which the Random Forest model is based on, builds a tree data structure. At every node of the tree, the data points are split based on one of three splits: Univariate split, linear combination split or categorical split. These splits are executed based on the predictor values of each data point during prediction. The decision tree model was not able to capture the nature of the dataset that well or achieve results comparable to Random Forest. Yet, the easy-to-visualize nature of decision trees allowed us to take a closer look at how predictors are being used during classification and what the cutoffs are for these predictors.
@@ -597,38 +755,11 @@ prp(model_AS_DT$finalModel, box.palette = "Blues", tweak = 1.2)
 
 ```
 
-# Variable Importance for Random Forest Models
+## Variable Importance for Random Forest Models
 One advantage of the Random Forests algorithm is that it is easy to interpret, robust to outliers and noise, and allows the analyst to infer causal mechanisms. Although the paper has serious methodological flaws, we think that its suggestion of Random Forests is well-grounded. The original R code by authors visualizes the variable importance for a Random Forest Model trained on the ```data_AM_imputed``` dataset, however we **dropped** that dataset as discussed before. It makes the most sense to us to visualize the variable importance on the 5 different random forest models we trained in the previous segment, 4 on ```data_train``` and 1 on ```data_train_balanced``` to be exact. By doing this, we can achieve: 
   i) See if theories suggested by different parties on theoretical variables deciding a civil war onset   agree with our findings or not, 
   ii) Observe if any variables are deemed to be `unimportant` by the random forest algorithm, measured by mean decrease in Gini classification measure in the case that they are not considered in training,
   iii) Observe the difference of variable importance on random forests models trained on original training set and artifically created training set, and essentially see how the SMOTE algorithms affects this measure.
-  
-## Replicating Author's Variable Importance Visualizations
-Before diving into our own versions, let's see if we get the same results with the paper on variable importance of a random forest model trained on ```data_AM_imputed```.
-```{r variable-importance-replication}
-## Random Forests on Amelia Imputed Data for Variable Importance Plot
-## Data Imputed only for Theoretically Important Variables
-## Done to analyze causal mechanisms
-
-# Author removes unnecessary columns from the dataset
-removed_vars <- names(data_AM_imputed) %in% c("X", "country", "year", "atwards") 
-data_AM_imputed <- data_AM_imputed[!removed_vars]
-
-REP_model_AM_imputed <-randomForest(as.factor(warstds)~., # new spec: all columns in Amelia dataset
-                                    sampsize=c(30, 90), # downsampling
-                                    importance=T, proximity=F, ntree=1000, 
-                                    confusion=T, err.rate=T, data=data_AM_imputed)
-# NOTE: The downsampling is random at each run due to incorrect seed setting (not replicable)
-
-varImpPlot(REP_model_AM_imputed, sort=T, type=2, 
-           main="Variables Contributing Most to Predictive Accuracy of Random Forests",
-           n.var=20)
-
-## Creating dotplot for Variable Importance Plot for RF
-#importance(REP_model_AM_imputed) # commented-out because prints a long list
-```
-
-One can check the full descriptions of the variables printed above on the y-axis of the Variable Importance table from the included ```data/Sambanis Appendix (Aug 06).pdf``` PDF file. When compared to the results from the paper, we see that roughly the same variables are included in the plot as the 20 most important variables. However, it could be easily observed that the order of these variables are different than those reported in the original paper. This is parallel to unreplicability issue mentioned previously. 
 
 ## Retraining Random Forest Models
 Firstly, we will retrain random forest models with the same specs and data mentioned above, but with ```randomForests()``` class this same in order to plot importance of variables. Note that these models will only be used to visualize variable importance, and will be dropped later in order to not cause any confusion.
@@ -669,7 +800,7 @@ varImpPlot(AS_RF_smoted, sort=T, type=2,
            n.var=num_vars)
 ```
 
-# Model Testing
+## Model Testing
 ## Testing Insights
 The paper includes a graph for comparing training AUC for uncorrected logistic regression models versus the random forest model, and a seperate graph for comparing the same metric for penalized logistic regression models versus the random forest model. The immediately noticable problem with this approach is that, each of these model have different specifications and hence different numbers of features they are trained on. As discussed before, the random forest model included downsampling which made the comparison even less reliable due to possible overfitting. 
 
@@ -678,33 +809,6 @@ Here, we propose that we compare ROC curves and AUC scores for each of the speci
 For each of the 3 models used for each of the 5 specifications and, we will use the ```predict()``` function with:
   i) type="raw" for number/class of predictions to be used in confusion matrices, and 
   ii) type="prob" for class probabilities to be used with ROC curves and computation of AUC metric.
-
-## Replicating Author's Prediction Processes
-We have previously discussed that the author's replicated models are trained on the entire ```HS_imputed``` dataset, predicted/tested on the same, entire dataset as well, and how this hurst the reliability of the performance measures reported in the original paper. Below is the corresponding replication.
-
-```{r testing-replication}
-# Testing/predictions for Fearon and Laitin specification (2003)
-REP_FL_uncorrected_pred_raw <- predict(REP_model_FL_uncorrected, newdata=data, type="raw")
-REP_FL_uncorrected_pred_prob <- predict(REP_model_FL_uncorrected, newdata=data, type="prob")
-REP_FL_penalized_pred_raw <- predict(REP_model_FL_penalized, newdata=data, type="raw")
-REP_FL_penalized_pred_prob <- predict(REP_model_FL_penalized, newdata=data, type="prob")
-
-# Testing/predictions for Collier and Hoeffler specification (2004)
-REP_CH_uncorrected_pred_raw <- predict(REP_model_CH_uncorrected, newdata=data, type="raw")
-REP_CH_uncorrected_pred_prob <- predict(REP_model_CH_uncorrected, newdata=data, type="prob")
-REP_CH_penalized_pred_raw <- predict(REP_model_CH_penalized, newdata=data, type="raw")
-REP_CH_penalized_pred_prob <- predict(REP_model_CH_penalized, newdata=data, type="prob")
-
-# Testing/predictions for Hegre and Sambanis specification (2006)
-REP_HS_uncorrected_pred_raw <- predict(REP_model_HS_uncorrected, newdata=data, type="raw")
-REP_HS_uncorrected_pred_prob <- predict(REP_model_HS_uncorrected, newdata=data, type="prob")
-REP_HS_penalized_pred_raw <- predict(REP_model_HS_penalized, newdata=data, type="raw")
-REP_HS_penalized_pred_prob <- predict(REP_model_HS_penalized, newdata=data, type="prob")
-
-# Testing/predictions for author specification (2016)
-REP_AS_RF_pred_raw <- predict(REP_model_AS_RF, newdata=data, type="raw")
-REP_AS_RF_pred_prob <- predict(REP_model_AS_RF, newdata=data, type="prob")
-```
 
 ## Our Own Prediction Processes
 ```{r testing-trained-models-on-out-of-sample-data}
@@ -846,37 +950,7 @@ F1_Score(data_test$warstds, AS_RF_smoted_pred_raw_3, positive = "war")
 
 
 
-## Replicating Author's Seperation Plots
-```{r seperation-plots-replication}
-# Seperation plot for prediction with Fearon and Laitin specification (2003) uncorrected LR
-separationplot(REP_FL_uncorrected_pred_prob$war,
-               as.numeric(data$warstds)-1, type="line",
-               line=T, lwd2=1, show.expected=T,
-               heading="REP: Fearon and Laitin Spec (2003) Uncorrected LR Seperation Plot",
-               height=1.5, col0="white", col1="black", newplot=F)
 
-# Seperation plot for prediction with Collier and Hoeffler specification (2004) uncorrected LR
-separationplot(REP_CH_uncorrected_pred_prob$war,
-               as.numeric(data$warstds)-1, type="line",
-               line=T, lwd2=1, show.expected=T,
-               heading="REP: Collier and Hoeffler Spec (2004) Uncorrected LR Seperation Plot",
-               height=1.5, col0="white", col1="black", newplot=F)
-
-# Seperation plot for prediction with Hegre and Sambanis specification (2006) uncorrected LR
-separationplot(REP_HS_uncorrected_pred_prob$war,
-               as.numeric(data$warstds)-1, type="line",
-               line=T, lwd2=1, show.expected=T,
-               heading="REP: Hegre and Sambanis Spec (2006) Uncorrected LR Seperation Plot",
-               height=1.5, col0="white", col1="black", newplot=F)
-
-# Seperation plot for prediction with Hegre and Sambanis specification (2006) uncorrected LR
-separationplot(REP_AS_RF_pred_prob$war,
-               as.numeric(data$warstds)-1, type="line",
-               line=T, lwd2=1, show.expected=T,
-               heading="REP: Author Spec (2016) Random Forests Seperation Plot",
-               height=1.5, col0="white", col1="black", newplot=F)
-```
-Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the tree logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
 
 ## Our Own Seperation Plots
 Let's draw the seperation plots for each instance.
@@ -967,56 +1041,6 @@ separationplot(AS_RF_smoted_pred_prob$war,
                height=1.5, col0="white", col1="black", newplot=F)
 ```
 
-## Replicating Author's ROC Curves with AUC Scores
-```{r roc-curves-replication}
-# Plot ROC curves for prediction comparing uncorrected FL (2003), CH (2004), 
-# and HS (2006) specs, as well as the Random Forests models (author's versions)
-plot.roc(data$warstds, REP_FL_uncorrected_pred_prob$war, col="blue",
-         xlim=c(1,0), las=1, bty="n", asp=NA,
-         main="REP: Uncorrected Logits and Random Forests")
-plot.roc(data$warstds, add=T, REP_CH_uncorrected_pred_prob$war, col="red")
-plot.roc(data$warstds, add=T, REP_HS_uncorrected_pred_prob$war, col="purple")
-plot.roc(data$warstds, add=T, REP_AS_RF_pred_prob$war, col="darkgreen")
-legend("bottomright", c(paste("(1) REP: FL (2003) Uncorrected LR, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_FL_uncorrected_pred_prob$war)$auc),3)),
-                        paste("(2) REP: CH (2004) Uncorrected LR, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_CH_uncorrected_pred_prob$war)$auc),3)),
-                        paste("(3) REP: HS (2006) Uncorrected LR, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_HS_uncorrected_pred_prob$war)$auc),3)),
-                        paste("(4) REP: AS (2016) Random Forest, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_AS_RF_pred_prob$war)$auc),3))),
-       text.col=c("blue","red","purple", "darkgreen"),  
-       cex = .75)
-
-# Plot ROC curves for prediction comparing penalized FL (2003), CH (2004), 
-# and HS (2006) specs, as well as the Random Forests models (author's versions)
-plot.roc(data$warstds, REP_FL_penalized_pred_prob$war, col="blue",
-         xlim=c(1,0), las=1, bty="n", asp=NA,
-         main="REP: Penalized Logits and Random Forests")
-plot.roc(data$warstds, add=T, REP_CH_penalized_pred_prob$war, col="red")
-plot.roc(data$warstds, add=T, REP_HS_penalized_pred_prob$war, col="purple")
-plot.roc(data$warstds, add=T, REP_AS_RF_pred_prob$war, col="darkgreen")
-legend("bottomright", c(paste("(1) REP: FL (2003) Penalized LR, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_FL_penalized_pred_prob$war)$auc),3)),
-                        paste("(2) REP: CH (2004) Penalized LR, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_CH_penalized_pred_prob$war)$auc),3)),
-                        paste("(3) REP: HS (2006) Penalized LR, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_HS_penalized_pred_prob$war)$auc),3)),
-                        paste("(4) REP: AS (2016) Random Forest, AUC:",
-                              round(as.numeric(roc(data$warstds,
-                                                   REP_AS_RF_pred_prob$war)$auc),3))),
-       text.col=c("blue","red","purple", "darkgreen"),  
-       cex = .75)
-
-```
-The unreplicability of the results are justified most with the reported ROC curves and accompanying AUC curves as shown above. It should be remembered that the curves and measures presented above are NOT tested with **out-of-sample** data, rather they simply act as a training summary. This explains the high AUC score of the random forest model.
 
 ## ROC Curves with AUC Scores
 Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: 
@@ -1270,8 +1294,8 @@ eg. F1 score variation plot couldn't be replicated because the author's paper di
 #Summary of changes made to original paper and extensions
 i) The original paper used different feature variables for each of the four models. To make the comparison fair, we have tested the performance of the four models across all set of features specified in the paper.
 ii) Instead of measuring the performance only on the training data set, we do a train - test split to test performance on out of sample data
-iii) Since we are working with an imbalanced dataset, we have used SMOTE to generate a more balanced version of the data. We have trained our 4 models on this data and monitored their performance
-iv) We have also trained and checked the performance of new models -  decision trees, boosting, neural networks
+iii) Since we are working with an imbalanced dataset, we have used SMOTE to generate a more balanced version of the data. We have trained our models on this data and monitored their performance
+iv) We have also trained and checked the performance of new models on the original data - namely, Decision trees and Boosted Classification Trees
 
 #Comparing our models / findings
 add detailed results and comparisons for F1 score and AUC
