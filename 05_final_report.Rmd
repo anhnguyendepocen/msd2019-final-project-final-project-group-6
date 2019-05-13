@@ -80,10 +80,6 @@ colnames(data_presentation) <- c('HS_original', 'HS_cleaned',
 rownames(data_presentation) <- c('No. features', 'No. empty cells', 'No. examples')
 as.data.frame(data_presentation)
 
-# Check intersection and difference of features on two datasets
-# setdiff(colnames(data_HS_imputed), colnames(data_HS_original))
-# length(intersect(colnames(data_HS_imputed), colnames(data_HS_original)))
-# intersect(colnames(data_HS_imputed), colnames(data_AF_imputed))
 ```
 
 ## Data Visualization
@@ -302,50 +298,31 @@ tc <- trainControl(method="cv",
 REP_model_FL_uncorrected <- train(FL_spec,
                                   metric="ROC", method="glm", family="binomial",
                                   trControl=tc_original, data=data)
-#summary(REP_model_FL_uncorrected) ## provides coefficients & traditional R model output
-#REP_model_FL_uncorrected ## provides CV summary stats
-#confusionMatrix(REP_model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
 
 # Fearon and Laitin LR Model (2003) Penalized
 REP_model_FL_penalized <- train(FL_spec,
                                 metric="ROC", method="plr", # Firth's penalized LR
                                 trControl=tc_original, data=data)
-#summary(REP_model_FL_penalized)
-#REP_model_FL_penalized
-#confusionMatrix(REP_model_FL_penalized, norm="average")
 
 # Collier and Hoeffler LR Model (2004) Uncorrected
 REP_model_CH_uncorrected <- train(CH_spec,
                                   metric="ROC", method="glm", family="binomial", 
                                   trControl=tc_original, data=data)
-#summary(REP_model_CH_uncorrected) ## provides coefficients & traditional R model output
-#REP_model_CH_uncorrected ## provides CV summary stats
-#confusionMatrix(REP_model_CH_uncorrected, norm="average") ## confusion matrix for predicted classes
 
 # Collier and Hoeffler LR Model (2004) Penalized
 REP_model_CH_penalized <- train(CH_spec,
                                 metric="ROC", method="plr", # Firth's penalized LR
                                 trControl=tc_original, data=data)
-#summary(REP_model_CH_penalized)
-#REP_model_CH_penalized
-#confusionMatrix(REP_model_CH_penalized, norm="average")
 
 # Hegre and Sambanis LR Model (2006) Uncorrected
 REP_model_HS_uncorrected <- train(HS_spec,
                                   metric="ROC", method="glm", family="binomial", 
                                   trControl=tc_original, data=data)
 
-#summary(REP_model_HS_uncorrected) ## provides coefficients & traditional R model output
-#REP_model_HS_uncorrected ## provides CV summary stats
-#confusionMatrix(REP_model_HS_uncorrected, norm="average") ## confusion matrix for predicted classes
-
 # Hegre and Sambanis LR Model (2006) Penalized
 REP_model_HS_penalized <- train(HS_spec,
                                 metric="ROC", method="plr", # Firth's penalized LR
                                 trControl=tc_original, data=data)
-#summary(REP_model_HS_penalized)
-#REP_model_HS_penalized
-#confusionMatrix(REP_model_HS_penalized, norm="average")
 
 # Random Forest Model on author specification (2016)
 REP_model_AS_RF <- train(author_spec,
@@ -354,9 +331,6 @@ REP_model_AS_RF <- train(author_spec,
                          importance=T, ## Variable importance measures retained
                          proximity=F, ntree=1000, ## number of trees grown
                          trControl=tc_original, data=data)
-#summary(REP_model_AS_RF)
-#REP_model_AS_RF
-#confusionMatrix(REP_model_AS_RF, norm="average")
 ```
 
   
@@ -449,7 +423,7 @@ separationplot(REP_AS_RF_pred_prob$war,
 Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the three logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model has the highest randomness with both downsampling and training control.
 
 ## Replicating F1 scores
-```{r f1-score-replication-and-confusion-matrix}
+```{r f1-score-replication}
 F1_Score(data_test$warstds, REP_FL_uncorrected_pred_raw, positive = "war")
 F1_Score(data_test$warstds, REP_FL_penalized_pred_raw, positive = "war")
 F1_Score(data_test$warstds, REP_CH_uncorrected_pred_raw, positive = "war")
@@ -540,25 +514,15 @@ model_FL_uncorrected <- train(FL_spec,
                               metric="ROC", method="glm", family="binomial",
                               trControl=tc, data=data_train)
 
-#summary(model_FL_uncorrected) ## provides coefficients & traditional R model output
-#model_FL_uncorrected ## provides CV summary stats
-#confusionMatrix(model_FL_uncorrected, norm="average") ## confusion matrix for predicted classes
-
 # Fearon and Laitin LR Model (2003) Penalized
 model_FL_penalized <- train(FL_spec,
                             metric="ROC", method="plr", # Firth's penalized LR
                             trControl=tc, data=data_train)
-#summary(model_FL_penalized)
-#model_FL_penalized
-#confusionMatrix(model_FL_penalized, norm="average")
 
 #Random Forest Model on Fearon and Laitin (2003) specification
 model_FL_RF <- train(FL_spec,
                      metric="ROC", method="rf",
                      trControl=tc, data=data_train)
-#summary(model_FL_RF)
-#model_FL_RF
-#confusionMatrix(model_FL_RF, norm="average")
 ```
 
 2) Collier and Hoeffler specification (2004) consisting of 12 variables
@@ -570,25 +534,15 @@ model_CH_uncorrected <- train(CH_spec,
                               metric="ROC", method="glm", family="binomial", 
                               trControl=tc, data=data_train)
 
-#summary(model_CH_uncorrected) ## provides coefficients & traditional R model output
-#model_CH_uncorrected ## provides CV summary stats
-#confusionMatrix(model_CH_uncorrected, norm="average") ## confusion matrix for predicted classes
-
 # Collier and Hoeffler LR Model (2004) Penalized
 model_CH_penalized <- train(CH_spec,
                             metric="ROC", method="plr", # Firth's penalized LR
                             trControl=tc, data=data_train)
-#summary(model_CH_penalized)
-#model_CH_penalized
-#confusionMatrix(model_CH_penalized, norm="average")
 
 # Random Forest Model on Collier and Hoeffler (2004) specification
 model_CH_RF <- train(CH_spec,
                      metric="ROC", method="rf",
                      trControl=tc, data=data_train)
-#summary(model_CH_RF)
-#model_CH_RF
-#confusionMatrix(model_CH_RF, norm="average")
 ```
 
 3) Hegre and Sambanis specification (2006) consisting of 20 variables
@@ -628,26 +582,17 @@ set.seed(666) ## the most metal seed for CV
 model_AS_uncorrected <- train(author_spec,
                               metric="ROC", method="glm", family="binomial", 
                               trControl=tc, data=data_train)
-#summary(model_AS_uncorrected) ## provides coefficients & traditional R model output
-#model_AS_uncorrected ## provides CV summary stats
-#confusionMatrix(model_AS_uncorrected, norm="average") ## confusion matrix for predicted classes
 
 # Author specification (2016) LR Model Penalized (CAUTION: estimated training time ~30 min)
 model_AS_penalized <- train(author_spec,
                             metric="ROC", method="plr", # Firth's penalized LR
                             trControl=tc, data=data_train)
-#summary(model_AS_penalized)
-#model_AS_penalized
-#confusionMatrix(model_AS_penalized, norm="average")
 
 # Random Forest Model on author specification (2016) (CAUTION: estimated training time ~30 min)
 model_AS_RF <- train(author_spec,
                      metric="ROC", method="rf",
                      importance=T, ## Variable importance measures retained
                      trControl=tc, data=data_train)
-#summary(model_AS_RF)
-#model_AS_RF
-#confusionMatrix(model_AS_RF, norm="average")
 ```
 
 5) The authors' specifications consisting of 88 variables, trained on ```data_train_balanced```, which was artificially generated from ```data_train``` using the SMOTE algorithm discussed previously.
@@ -666,10 +611,6 @@ model_AS_uncorrected_smoted <- train(author_spec,
 model_AS_penalized_smoted <- train(author_spec,
                                    metric="ROC", method="plr", # Firth's penalized LR
                                    trControl=tc, data=data_train_balanced)
-#summary(model_AS_penalized_smoted)
-#model_AS_penalized_smoted
-#confusionMatrix(model_AS_penalized_smoted, norm="average")
-
 
 ## with different smote neighbour settings
 
@@ -907,11 +848,6 @@ table(pred=HS_RF_pred_raw, obs=data_test$warstds)
 F1_Score(data_test$warstds, HS_uncorrected_pred_raw, positive = "war")
 F1_Score(data_test$warstds, HS_penalized_pred_raw, positive = "war")
 F1_Score(data_test$warstds, HS_RF_pred_raw, positive = "war")
-
-# Confusion matrices for prediction with author specification (2016)
-#table(pred=AS_uncorrected_pred_raw, obs=data_test$warstds)
-# table(pred=AS_penalized_pred_raw, obs=data_test$warstds)
-# table(pred=AS_RF_pred_raw, obs=data_test$warstds)
 
 # Confusion matrices for prediction with author specification using additional models
 table(pred=AS_DT_pred_raw, obs=data_test$warstds)
