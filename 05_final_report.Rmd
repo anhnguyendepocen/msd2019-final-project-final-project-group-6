@@ -1130,9 +1130,6 @@ legend("bottomright", c(paste("(1) FL (2003), AUC:",
 We have seen how Random Forest models have performed againts the other well-known LR models with all specifications mentioned in the paper. We have even seen how the performance of Random Forest models varies when we played with parameters of the SMOTE algorithm. Finally, we can evaluate how the two models we proposed alongside the Random Forest model, i) Decision Tree and ii) Boosted Classification Trees, perform compared to the Random Forest model. It should be noted all of these models are trained with the same author specification (2016) and on the splitted ```data_train``` dataset.
 ```{r roc-curves-for-experimental-ml-models}
 # Plot ROC curves for prediction with author specification (2016)
-AS_RF_pred_prob
-AS_DT_pred_prob
-AS_Boost_pred_prob
 plot.roc(data_test$warstds, AS_RF_pred_prob$war, col="darkgreen",
          xlim=c(1,0), las=1, bty="n", asp=NA,
          main="Out-of-sample ROC Curves for Models w/ author spec (2016)")
