@@ -13,5 +13,6 @@ The repository is structured as follows:
 3. `03_get_new_data.sh` gets new data used to extend the original results of this paper and places a copy in `data/`
 4. `04_clean_new_data.sh` cleans this data and saves the relevant dataframe(s) in `data/new_data_clean.Rdata`
 5. `05_final_report.Rmd` analysis both the original and new data to replicate and extend the results of the original paper, and produces the final report `05_final_report.pdf`
+6. `06_Analysis_And_Comparison.Rmd` analysis both the original and new data to replicate and extend the results of the original paper, and produces the final report `06_Analysis_And_Comparison.pdf`
 
 ----
