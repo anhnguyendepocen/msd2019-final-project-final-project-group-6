@@ -422,7 +422,7 @@ separationplot(REP_AS_RF_pred_prob$war,
                height=1.5, col0="white", col1="black", newplot=F)
 ```
 
-Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the three logistic regression models. The Random Forests model's seperation plot differs, and this is expected, as this is the model with the highest randomness (both downsampling and training control).
+Although we have argued that models are not replicable, the seperation plots we generated for author's replicated models and the ones presented in the original paper are somewhat similar for all of the three logistic regression models. The Random Forests model's seperation plot differs **occasionally**, and this is expected, as this is the model with the highest randomness (both downsampling and training control). Otherwise, the final represented seperation plot of random forest may look similar to the one represented in paper.
 
 ## Authors' F1 scores
 The F1-Score is F1 = 2 x (Precision x Recall) / (Precision + Recall) where Precision = TP / (TP + FP) and Recall = TP / (TP + FN).
@@ -445,8 +445,6 @@ rownames(REP_f1_presentation) <- c('REP FL (2003) Uncorrected LR', 'REP FL (2003
                                   'REP AS (2016) RF')
 as.data.frame(REP_f1_presentation)
 ```
-
-VATSALA: ...
 
 ## Authors' ROC Curves with AUC Scores
 ```{r roc-curves-replication}
@@ -639,6 +637,7 @@ model_AS_DT <- train(author_spec,
                       trControl=tc,
                       data=data_train)
 
+set.seed(666) ## the most metal seed for CV
 # This is the Boosted Classifiaction Trees model that we implemented
 # The model uses Adaptive Boosting
 model_AS_Boost <- train(author_spec,
@@ -860,7 +859,6 @@ rownames(AS_experimental_f1_presentation) <- c('AS (2016) Decision Trees',
 as.data.frame(AS_experimental_f1_presentation)
 ```
 
-
 ## ROC Curves with AUC Scores
 Let's draw ROC Curves with AUC metric for each instance. There are two possible groupings that could be applied: 
 
@@ -1009,13 +1007,13 @@ legend("bottomright", c(paste("(1) FL (2003), AUC:",
        cex = .75)
 
 # Plot ROC curves for prediction with random forest model
-plot.roc(data_test$warstds, FL_penalized_pred_prob$war, col="blue",
+plot.roc(data_test$warstds, FL_RF_pred_prob$war, col="blue",
          xlim=c(1,0), las=1, bty="n", asp=NA,
          main="Out-of-sample ROC Curves for penalized LR Models")
-plot.roc(data_test$warstds, add=T, CH_penalized_pred_prob$war, col="red")
-plot.roc(data_test$warstds, add=T, HS_penalized_pred_prob$war, col="darkgreen")
-plot.roc(data_test$warstds, add=T, AS_penalized_pred_prob$war, col="purple")
-plot.roc(data_test$warstds, add=T, AS_penalized_smoted_pred_prob$war, col="goldenrod")
+plot.roc(data_test$warstds, add=T, CH_RF_pred_prob$war, col="red")
+plot.roc(data_test$warstds, add=T, HS_RF_pred_prob$war, col="darkgreen")
+plot.roc(data_test$warstds, add=T, AS_RF_pred_prob$war, col="purple")
+plot.roc(data_test$warstds, add=T, AS_RF_smoted_pred_prob$war, col="goldenrod")
 
 legend("bottomright", c(paste("(1) FL (2003), AUC:",
                               round(as.numeric(roc(data_test$warstds,
@@ -1032,12 +1030,11 @@ legend("bottomright", c(paste("(1) FL (2003), AUC:",
                         paste("(5) AS (2016) SMOTE, AUC:",
                               round(as.numeric(roc(data_test$warstds,
                                                    AS_RF_smoted_pred_prob$war)$auc),3))),
-       
        text.col=c("blue","red","darkgreen", "purple", "goldenrod"),  
        cex = .75)
 ```
 
-### Comparing experimental ML models vs. Random Forest model
+### Comparing experimental ML models vs. Random Forest Model
 We have seen how Random Forest models have performed againts the other well-known LR models with all specifications mentioned in the paper. We have even seen how the performance of Random Forest models varies when we played with parameters of the SMOTE algorithm. Finally, we can evaluate how the two models we proposed alongside the Random Forest model, i) Decision Tree and ii) Boosted Classification Trees, perform compared to the Random Forest model. It should be noted all of these models are trained with the same author specification (2016) and on the splitted ```data_train``` dataset.
 ```{r roc-curves-for-experimental-ml-models}
 # Plot ROC curves for prediction with author specification (2016)
@@ -1059,26 +1056,16 @@ legend("bottomright", c(paste("(1) Random Forest, AUC:",
        cex = .75)
 ```
 
-# Dependencies Summary
-The following is a list of all packages used to generate these results.
-```{r}
-sessionInfo()
-```
-
-
-# Summary of changes made to original paper and extensions
+# Summary
 i) The original paper used different feature variables for each of the four models. To make the comparison fair, we have tested the performance of the four models across all set of features specified in the paper.
 ii) Instead of measuring the performance only on the training data set, we do a train - test split to test performance on out of sample data
 iii) Since we are working with an imbalanced dataset, we have used SMOTE to generate a more balanced version of the data. We have trained our models on this data and monitored their performance
 iv) We have also trained and checked the performance of new models on the original data - namely, Decision trees and Boosted Classification Trees
 
-# Analysis, Comparison and comments about reproducibility
-These details are added in the Analysis_And_comparison.pdf. We have done this as we report values in that which change slightly everytime the report is run and the comparison can be presented only based on the final values observed.Also, we have done this to avoid running this final report for every small change in our summary
+These details are added in the ```06_analysis_and_comparison.pdf```. We have done this as we report values in that which change slightly everytime the report is run and the comparison can be presented only based on the final values observed. Also, we have done this to avoid running this final report for every small change in our summary.
 
-# References
-## Related Papers & Datasets
-## StackOverflow for the Rescue!
-* https://stackoverflow.com/questions/11225343/how-to-create-a-world-map-in-r-with-specific-countries-filled-in
-* https://stackoverflow.com/questions/20624698/fixing-set-seed-for-an-entire-session
-* https://stackoverflow.com/questions/42057979/proc-roc-curves-remove-empty-space
-* https://stackoverflow.com/questions/30491213/the-union-of-several-vectors
+# Dependencies Summary
+The following is a list of all packages used to generate these results.
+```{r}
+sessionInfo()
+```
