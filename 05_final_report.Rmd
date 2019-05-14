@@ -21,7 +21,7 @@ library(caret) # for training LR and RF models
 library(ROCR)
 library(pROC) # for plotting ROC curves
 library(stepPlr)
-library(doMC) # for distributed workload
+#library(doMC) # for distributed workload
 library(tidyverse)
 library(foreign) # for reading Stata .dta files
 library(maptools) # for displaying countries on world map
@@ -33,7 +33,7 @@ theme_set(theme_bw())
 
 knitr::opts_chunk$set(echo = TRUE)
 
-registerDoMC(cores=7) ## distributing workload over multiple cores for faster computation
+#registerDoMC(cores=7) ## distributing workload over multiple cores for faster computation
 ```
 
 # Introduction
