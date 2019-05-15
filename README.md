@@ -8,7 +8,7 @@ A complete report of our results is in `05_final_report.pdf`, which can be gener
 
 The repository is structured as follows:
 
-1. `01_get_original_data.sh` gets the original data used by the authors and places a copy in `data/`
+1. `01_get_original_data.sh` gets the original Hegre and Sambanis (2006) dataset. We only use this dataset for data visualization and data comparison. The original datasets used by the authors were acquired from Harvard Dataverse, but we are not pulling the data through any script as we couldn't find any viable download link. 
 2. `02_clean_original_data.sh` cleans this data and saves the relevant dataframe(s) in `data/original_data_clean.Rdata`
 3. `03_get_new_data.sh` gets new data used to extend the original results of this paper and places a copy in `data/`
 4. `04_clean_new_data.sh` cleans this data and saves the relevant dataframe(s) in `data/new_data_clean.Rdata`
